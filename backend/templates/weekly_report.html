@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="UTF-8">
+<style>
+  body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: #f5f5f5; margin: 0; padding: 20px; direction: rtl; }
+  .container { max-width: 650px; margin: 0 auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); overflow: hidden; }
+  .header { background: linear-gradient(135deg, #7c3aed, #2563eb); color: #fff; padding: 28px 30px; }
+  .header h1 { margin: 0; font-size: 24px; }
+  .header p { margin: 8px 0 0; opacity: 0.9; }
+  .stats { display: flex; gap: 16px; padding: 20px 30px; background: #f8fafc; }
+  .stat { flex: 1; text-align: center; }
+  .stat-num { font-size: 28px; font-weight: 700; color: #2563eb; }
+  .stat-label { font-size: 12px; color: #64748b; margin-top: 4px; }
+  .body { padding: 24px 30px; }
+  .summary-box { background: #eff6ff; border-radius: 10px; padding: 16px 20px; margin-bottom: 20px; line-height: 1.7; }
+  .prop-row { display: flex; align-items: center; gap: 16px; padding: 14px 0; border-bottom: 1px solid #f1f5f9; }
+  .prop-row:last-child { border-bottom: none; }
+  .prop-score { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; color: #fff; flex-shrink: 0; }
+  .score-green { background: #059669; }
+  .score-yellow { background: #f59e0b; }
+  .score-red { background: #ef4444; }
+  .prop-info { flex: 1; }
+  .prop-info h3 { margin: 0; font-size: 15px; color: #1e293b; }
+  .prop-info p { margin: 4px 0 0; font-size: 13px; color: #64748b; }
+  .prop-price { font-weight: 700; font-size: 16px; color: #059669; white-space: nowrap; }
+  a.prop-link { color: #2563eb; text-decoration: none; font-size: 13px; }
+  a.prop-link:hover { text-decoration: underline; }
+  .price-drop-tag { font-size: 11px; background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 6px; margin-right: 6px; }
+  .yield-tag { font-size: 11px; color: #1d4ed8; }
+  .prop-neighborhood { font-size: 12px; color: #64748b; margin: 4px 0 0; }
+  .footer { background: #f8fafc; padding: 16px 30px; text-align: center; font-size: 12px; color: #94a3b8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>📊 דו"ח שבועי - סוכן הנדל"ן</h1>
+    <p>שלום {{ user_name }}, הנה סיכום השבוע שלך ({{ report_date }})</p>
+  </div>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-num">{{ total_properties }}</div>
+      <div class="stat-label">דירות נמצאו</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">{{ "{:,.0f}".format(avg_price) if avg_price else "—" }}</div>
+      <div class="stat-label">מחיר ממוצע (₪)</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">{{ top_score }}</div>
+      <div class="stat-label">ציון מקסימלי</div>
+    </div>
+  </div>
+
+  <div class="body">
+    {% if ai_summary %}
+    <div class="summary-box">{{ ai_summary }}</div>
+    {% endif %}
+
+    <h2 style="font-size:18px; color:#1e293b; margin-bottom:16px;">הדירות שנמצאו</h2>
+
+    {% for prop in properties %}
+    <div class="prop-row">
+      <div class="prop-score {% if prop.ai_score and prop.ai_score >= 70 %}score-green{% elif prop.ai_score and prop.ai_score >= 45 %}score-yellow{% else %}score-red{% endif %}">
+        {{ prop.ai_score or "?" }}
+      </div>
+      <div class="prop-info">
+        <h3>{{ prop.city }}{% if prop.neighborhood %}, {{ prop.neighborhood }}{% endif %}</h3>
+        <p>{{ prop.rooms or "?" }} חד' · {{ prop.size_sqm or "?" }} מ"ר · קומה {{ prop.floor or "?" }}</p>
+        {% if prop.listing_url %}<a href="{{ prop.listing_url }}" class="prop-link">צפה במודעה &larr;</a>{% endif %}
+      </div>
+      <div class="prop-price">{{ "{:,.0f}".format(prop.price) }} ₪</div>
+      {% if prop.get('price_drop') %}<span class="price-drop-tag">💰 הורדת מחיר</span>{% endif %}
+      {% if prop.get('annual_yield_pct') is not none %}<span class="yield-tag">תשואה {{ "%.1f"|format(prop.annual_yield_pct) }}%</span>{% endif %}
+      {% if prop.get('neighborhood_insights') %}<p class="prop-neighborhood">{{ (prop.neighborhood_insights or '')[:120] }}{% if (prop.neighborhood_insights or '')|length > 120 %}…{% endif %}</p>{% endif %}
+    </div>
+    {% endfor %}
+
+    {% if not properties %}
+    <p style="text-align:center; color:#94a3b8; padding:30px;">לא נמצאו דירות חדשות השבוע.</p>
+    {% endif %}
+  </div>
+
+  <div class="footer">
+    <p>דו"ח שבועי אוטומטי | סוכן הנדל"ן החכם של אסיף</p>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="UTF-8">
+<style>
+  body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: #f5f5f5; margin: 0; padding: 20px; direction: rtl; }
+  .container { max-width: 600px; margin: 0 auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); overflow: hidden; }
+  .header { background: linear-gradient(135deg, #2563eb, #7c3aed); color: #fff; padding: 24px 30px; }
+  .header h1 { margin: 0; font-size: 22px; }
+  .header p { margin: 8px 0 0; opacity: 0.9; font-size: 14px; }
+  .body { padding: 24px 30px; }
+  .property-card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 20px; margin-bottom: 16px; background: #fafbfc; }
+  .property-card h2 { margin: 0 0 8px; color: #1e293b; font-size: 18px; }
+  .property-meta { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+  .meta-item { background: #eff6ff; color: #2563eb; padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 500; }
+  .price { font-size: 24px; font-weight: 700; color: #059669; margin: 12px 0; }
+  .score-bar { height: 8px; background: #e5e7eb; border-radius: 4px; margin: 12px 0; }
+  .score-fill { height: 100%; border-radius: 4px; }
+  .score-high { background: #059669; }
+  .score-mid { background: #f59e0b; }
+  .score-low { background: #ef4444; }
+  .summary { background: #f0fdf4; border-right: 4px solid #059669; padding: 12px 16px; margin: 12px 0; border-radius: 0 8px 8px 0; font-size: 14px; line-height: 1.6; }
+  .pros-cons { display: flex; gap: 16px; margin: 12px 0; }
+  .pros, .cons { flex: 1; font-size: 13px; }
+  .pros li { color: #059669; }
+  .cons li { color: #ef4444; }
+  .price-drop-badge { background: #dcfce7; color: #166534; padding: 6px 12px; border-radius: 8px; font-weight: 600; display: inline-block; margin: 8px 0; }
+  .yield-badge { color: #1d4ed8; font-weight: 600; margin: 4px 0; }
+  .value-badge { color: #64748b; font-size: 13px; margin: 4px 0; }
+  .neighborhood-box { background: #f0fdf4; border-right: 4px solid #059669; padding: 10px 14px; margin: 10px 0; border-radius: 0 8px 8px 0; font-size: 13px; }
+  .cta { display: inline-block; background: #2563eb; color: #fff !important; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: 600; margin-top: 8px; }
+  .footer { background: #f8fafc; padding: 16px 30px; text-align: center; font-size: 12px; color: #94a3b8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>🏠 נמצאה דירה חדשה!</h1>
+    <p>הסוכן החכם מצא דירה שמתאימה לדרישות שלך</p>
+  </div>
+  <div class="body">
+    {% for prop in properties %}
+    <div class="property-card">
+      <h2>{{ prop.city }}{% if prop.neighborhood %}, {{ prop.neighborhood }}{% endif %}</h2>
+      {% if prop.address %}<p style="color:#64748b; margin:0 0 8px;">{{ prop.address }}</p>{% endif %}
+
+      <div class="property-meta">
+        {% if prop.rooms %}<span class="meta-item">{{ prop.rooms }} חדרים</span>{% endif %}
+        {% if prop.floor is not none %}<span class="meta-item">קומה {{ prop.floor }}</span>{% endif %}
+        {% if prop.size_sqm %}<span class="meta-item">{{ prop.size_sqm }} מ"ר</span>{% endif %}
+        {% if prop.has_parking %}<span class="meta-item">🅿️ חניה</span>{% endif %}
+        {% if prop.has_elevator %}<span class="meta-item">🔼 מעלית</span>{% endif %}
+        {% if prop.has_mamad %}<span class="meta-item">🛡️ ממ"ד</span>{% endif %}
+      </div>
+
+      <div class="price">{{ "{:,.0f}".format(prop.price) }} ₪</div>
+      {% if prop.get('price_drop') %}<p class="price-drop-badge">💰 הורדת מחיר</p>{% endif %}
+      {% if prop.get('annual_yield_pct') is not none %}<p class="yield-badge">📈 תשואה שנתית משוערת: {{ "%.1f"|format(prop.annual_yield_pct) }}%</p>{% endif %}
+      {% if prop.get('value_label') %}<p class="value-badge">{{ prop.value_label }}</p>{% endif %}
+
+      {% if prop.ai_score is not none %}
+      <p style="font-size:13px; color:#64748b;">ציון התאמה: <strong>{{ prop.ai_score }}/100</strong></p>
+      <div class="score-bar">
+        <div class="score-fill {% if prop.ai_score >= 70 %}score-high{% elif prop.ai_score >= 45 %}score-mid{% else %}score-low{% endif %}"
+             style="width: {{ prop.ai_score }}%;"></div>
+      </div>
+      {% endif %}
+
+      {% if prop.ai_summary %}
+      <div class="summary">{{ prop.ai_summary }}</div>
+      {% endif %}
+      {% if prop.get('neighborhood_insights') %}
+      <div class="neighborhood-box"><strong>תובנות שכונה (AI):</strong> {{ prop.neighborhood_insights }}</div>
+      {% endif %}
+
+      {% if prop.listing_url %}
+      <a href="{{ prop.listing_url }}" class="cta">צפה במודעה המלאה &larr;</a>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  <div class="footer">
+    <p>הודעה זו נשלחה אוטומטית ע"י סוכן הנדל"ן החכם של אסיף</p>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,156 @@
+@import "tailwindcss";
+
+/* ───────── Levera Global Theme ───────── */
+:root {
+  --color-primary: #0d9488;
+  --color-primary-light: #14b8a6;
+  --color-primary-dark: #0f766e;
+  --color-accent: #6366f1;
+  --color-accent-light: #818cf8;
+  --color-surface: #ffffff;
+  --color-bg: #f8fafc;
+  --color-bg-subtle: #f1f5f9;
+  --color-text: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-muted: #94a3b8;
+  --color-border: #e2e8f0;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.5rem;
+  --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.04), 0 4px 12px rgba(15, 23, 42, 0.06);
+  --shadow-elevated: 0 4px 24px rgba(15, 23, 42, 0.10);
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+html {
+  direction: rtl;
+}
+
+body {
+  font-family: 'Heebo', ui-sans-serif, system-ui, sans-serif;
+  margin: 0;
+  min-height: 100vh;
+  background: var(--color-bg);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  text-align: right;
+}
+
+input,
+textarea,
+select,
+button {
+  direction: rtl;
+  text-align: right;
+}
+
+/* ───────── Shared Utility Classes ───────── */
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+}
+
+@layer components {
+  .levera-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-2xl);
+    box-shadow: var(--shadow-card);
+  }
+
+  .levera-input {
+    width: 100%;
+    padding: 0.625rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: 0.875rem;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  }
+  .levera-input::placeholder { color: var(--color-text-muted); }
+  .levera-input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.15);
+  }
+
+  .levera-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.25rem;
+    border-radius: var(--radius-lg);
+    font-weight: 600;
+    font-size: 0.875rem;
+    transition: all var(--transition-base);
+    cursor: pointer;
+    border: none;
+  }
+  .levera-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .levera-btn-primary {
+    background: var(--color-primary);
+    color: white;
+    box-shadow: 0 2px 8px rgba(13, 148, 136, 0.25);
+  }
+  .levera-btn-primary:hover:not(:disabled) {
+    background: var(--color-primary-dark);
+    box-shadow: 0 4px 16px rgba(13, 148, 136, 0.35);
+    transform: translateY(-1px);
+  }
+
+  .levera-btn-secondary {
+    background: var(--color-bg-subtle);
+    color: var(--color-text-secondary);
+    border: 1px solid var(--color-border);
+  }
+  .levera-btn-secondary:hover:not(:disabled) {
+    background: var(--color-border);
+    color: var(--color-text);
+  }
+
+  .levera-btn-accent {
+    background: var(--color-accent);
+    color: white;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+  }
+  .levera-btn-accent:hover:not(:disabled) {
+    background: #4f46e5;
+    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.35);
+    transform: translateY(-1px);
+  }
+
+  .levera-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  .levera-label {
+    display: block;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    margin-bottom: 0.375rem;
+  }
+
+  .levera-section-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--color-text);
+  }
+}

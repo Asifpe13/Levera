@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/authcontext.tsx","./src/api.ts","./src/main.tsx","./src/components/propertycard.tsx","./src/components/tabdeals.tsx","./src/components/tabsettings.tsx","./src/components/tabtrends.tsx","./src/pages/dashboardpage.tsx","./src/pages/loginpage.tsx","./src/pages/registerpage.tsx"],"errors":true,"version":"5.6.3"}
