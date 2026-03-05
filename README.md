@@ -1,11 +1,11 @@
-# Aigent Real Estate
+# Levera — Real Estate Decision Intelligence
 
-סוכן AI לחיפוש דירות — סורק אתרים, מנתח עם AI, שולח התראות ודו"חות.
+סוכן נדל״ן חכם שמסנן אתרי מודעות, מחשב משכנתא ותזרים לפי החוק בישראל, משווה מחירים לנתוני מדינה ומציג רק דירות שעוברות את הקריטריונים הפיננסיים של המשתמש.
 
 ## מבנה הפרויקט
 
 ```
-Aigent_RealEstate/
+Levera/
 ├── backend/      ← שרת (FastAPI, DB, סורקים, AI, אימייל)
 ├── frontend/     ← לקוח (React + TypeScript)
 └── .env          ← משתני סביבה (MONGODB_URI וכו')

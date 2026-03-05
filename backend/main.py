@@ -32,7 +32,7 @@ from engine import ScanEngine
 
 def main():
     logger.info("=" * 60)
-    logger.info("  Aigent Real Estate — Starting Agent")
+    logger.info("  Levera — Real Estate Agent is starting")
     logger.info("=" * 60)
 
     db = DatabaseManager()

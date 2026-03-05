@@ -13,6 +13,14 @@ MARKET_SETTINGS = {
 # חוק המשכנתא בישראל — בית ראשון: נדרש 25% הון עצמי ממחיר הדירה (משרד האוצר / פיקוח בנק ישראל)
 FIRST_HOME_MIN_EQUITY_PCT = 0.25  # 25%
 
+# דרישות הון עצמי לפי מספר דירה:
+# 1 = דירה ראשונה, 2/3 = דירות נוספות (השקעה) — לרוב 50% הון עצמי.
+HOME_EQUITY_BY_HOME_INDEX: dict[int, float] = {
+    1: FIRST_HOME_MIN_EQUITY_PCT,
+    2: 0.50,
+    3: 0.50,
+}
+
 
 # ערכי source_id שלא נחשבים כמזהה מודעה תקף (מניעת קישורים שבורים)
 INVALID_SOURCE_IDS = frozenset({

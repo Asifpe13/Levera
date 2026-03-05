@@ -1,7 +1,7 @@
 import math
 from typing import Optional, Callable
 
-from config import MARKET_SETTINGS, FIRST_HOME_MIN_EQUITY_PCT
+from config import MARKET_SETTINGS, FIRST_HOME_MIN_EQUITY_PCT, HOME_EQUITY_BY_HOME_INDEX
 
 # Rough monthly rent (NIS) by city for yield estimation — generic mapping
 DEFAULT_RENT_PER_SQM = 45
@@ -111,7 +111,7 @@ def check_property_fit(property_data: dict, user_data: dict) -> tuple[bool, str 
         if max_rent is not None and max_rent > 0 and price > max_rent:
             return False, f"שכר דירה {price:,.0f}₪ מעל התקציב ({max_rent:,.0f}₪)"
         return True, 0
-    # מכירה: חוק המשכנתא — בית ראשון 25% הון עצמי; בנקים לא מאשרים החזר מעל אחוז מההכנסה
+    # מכירה: חוק המשכנתא — בית ראשון ~25% הון עצמי; דירות להשקעה לרוב דורשות הון עצמי גבוה יותר.
     max_price = user_data.get("max_price")
     if max_price and price > max_price:
         return False, f"מחיר {price:,.0f}₪ מעל התקציב ({max_price:,.0f}₪)"
@@ -119,11 +119,18 @@ def check_property_fit(property_data: dict, user_data: dict) -> tuple[bool, str 
     income = user_data.get("monthly_income", 0)
     ratio = user_data.get("max_repayment_ratio", 0.4)
 
-    # בית ראשון: נדרש 25% הון עצמי ממחיר הדירה (חוק המשכנתא בישראל)
-    required_equity = price * FIRST_HOME_MIN_EQUITY_PCT
+    # חוק המשכנתא בישראל:
+    # - דירה ראשונה: ~75% מימון (25% הון עצמי)
+    # - דירה שנייה/שלישית: בדרך־כלל 50% מימון (50% הון עצמי)
+    home_index = int(user_data.get("home_index") or 1)
+    equity_pct = HOME_EQUITY_BY_HOME_INDEX.get(
+        home_index,
+        0.50 if home_index > 1 else FIRST_HOME_MIN_EQUITY_PCT,
+    )
+    required_equity = price * equity_pct
     if equity < required_equity:
         return False, (
-            f"לבית ראשון נדרש 25% הון עצמי (חוק המשכנתא). "
+            f"לנכס מסוג זה נדרש לפחות {equity_pct * 100:.0f}% הון עצמי (חוק המשכנתא). "
             f"הון נדרש: {required_equity:,.0f}₪ (יש לך {equity:,.0f}₪)"
         )
 

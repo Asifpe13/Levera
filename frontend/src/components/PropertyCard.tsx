@@ -121,6 +121,12 @@ export default function PropertyCard({ prop }: { prop: Property }) {
               )}
             </div>
 
+            {prop.profile_area_message && (
+              <div className="mt-4 p-3 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-700 leading-relaxed">
+                {prop.profile_area_message}
+              </div>
+            )}
+
             {prop.ai_summary && (
               <div className="mt-5 p-4 rounded-xl bg-teal-50 border border-teal-100 text-slate-700 text-base leading-relaxed">
                 {prop.ai_summary}

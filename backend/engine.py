@@ -32,8 +32,74 @@ def _build_scrapers(deal_type: str) -> list:
     ]
 
 
-def _enrich_property_insights(prop_data: dict, city_avg: dict, ai: AIService) -> None:
-    """Set estimated_rent, annual_yield_pct, value_label, neighborhood_insights. In-place."""
+def _build_profile_area_message(prop_data: dict, profile_type: str) -> str | None:
+    """Build a short, profile-specific 'proof from the field' message based on market data."""
+    city = (prop_data.get("city") or "").strip()
+    address = (prop_data.get("address") or "").strip()
+    neighborhood = (prop_data.get("neighborhood") or "").strip()
+    rooms = prop_data.get("rooms")
+    size_sqm = prop_data.get("size_sqm")
+    price = prop_data.get("price") or 0
+    avg_sqm = prop_data.get("market_avg_per_sqm")
+    deviation_pct = prop_data.get("price_deviation_pct")
+    recent_app = prop_data.get("recent_appreciation_pct")
+    rent_min = prop_data.get("rent_range_min")
+    rent_max = prop_data.get("rent_range_max")
+    annual_yield = prop_data.get("annual_yield_pct")
+
+    if not city or avg_sqm is None:
+        return None
+
+    location_label = address or neighborhood or city
+
+    if profile_type == "HOME_BUYER":
+        # קונה דירה ראשונה — השוואת מחיר לדירות סמוכות
+        parts = []
+        size_note = f", כ-{size_sqm:.0f} מ\"ר" if size_sqm else ""
+        parts.append(
+            f"באזור {location_label} דירות דומות ({rooms or '?'} חד׳{size_note}) "
+            f"נמכרו סביב ₪{avg_sqm:,.0f} למ\"ר לפי נתוני מדינה."
+        )
+        if deviation_pct is not None:
+            if deviation_pct > 0:
+                parts.append(f"הדירה הזו יקרה בכ-{abs(deviation_pct):.1f}% ביחס לממוצע באזור.")
+            elif deviation_pct < 0:
+                parts.append(f"הדירה הזו זולה בכ-{abs(deviation_pct):.1f}% ביחס לממוצע באזור.")
+        return " ".join(parts)
+
+    if profile_type == "INVESTOR":
+        # משקיע — עליית ערך ונזילות
+        parts = []
+        if recent_app is not None:
+            parts.append(
+                f"על סמך שלוש השנים האחרונות, מחירי דירות דומות באזור עלו בכ-{recent_app:.1f}%."
+            )
+        if annual_yield is not None:
+            parts.append(f"תשואת שכירות משוערת כיום היא כ-{annual_yield:.1f}% מהמחיר.")
+        if not parts:
+            return None
+        return " ".join(parts)
+
+    if profile_type == "CASH_FLOW_MAXIMIZER":
+        # מקסום תזרים — טווח שכירות ותשואה
+        parts = []
+        if rent_min and rent_max:
+            parts.append(
+                f"שכר דירה חודשי לדירות דומות באזור נע לרוב בטווח {rent_min:,.0f}–{rent_max:,.0f} ₪."
+            )
+        elif rent_min:
+            parts.append(f"שכר דירה משוער לדירות דומות באזור הוא סביב {rent_min:,.0f} ₪ לחודש.")
+        if annual_yield is not None:
+            parts.append(f"זה משקף תשואה משוערת של כ-{annual_yield:.1f}% על המחיר הנוכחי.")
+        if not parts:
+            return None
+        return " ".join(parts)
+
+    return None
+
+
+def _enrich_property_insights(prop_data: dict, city_avg: dict, ai: AIService, profile_type: str) -> None:
+    """Set estimated_rent, annual_yield_pct, value_label, neighborhood_insights, profile_area_message. In-place."""
     price = prop_data.get("price") or 0
     rooms = prop_data.get("rooms")
     city = (prop_data.get("city") or "").strip()
@@ -53,6 +119,11 @@ def _enrich_property_insights(prop_data: dict, city_avg: dict, ai: AIService) ->
             enrich_property_with_market(prop_data, ai.client, model_name=getattr(ai, "model_name", "gemini-2.0-flash"))
         except Exception as e:
             logger.debug(f"Market validation skipped for {city}: {e}")
+
+    # הודעת הקשר לפי פרופיל (Home Buyer / Investor / Cash Flow)
+    msg = _build_profile_area_message(prop_data, profile_type)
+    if msg:
+        prop_data["profile_area_message"] = msg
 
 
 class ScanEngine:
@@ -90,6 +161,8 @@ class ScanEngine:
         user_prefs = {
             "target_cities": user.get("target_cities", []),
             "search_type": search_type,
+            "profile_type": user.get("profile_type", "HOME_BUYER"),
+            "home_index": int(user.get("home_index", 1)),
             "equity": user.get("equity", 0),
             "monthly_income": user.get("monthly_income", 0),
             "room_range_min": user.get("room_range_min", 1),
@@ -127,6 +200,8 @@ class ScanEngine:
         new_matches = []
         city_avg = self.db.get_avg_price_per_room_by_city(user_email)
 
+        profile_type = user_prefs.get("profile_type", "HOME_BUYER")
+
         for prop_data in all_raw_properties:
             source_id = prop_data.get("source_id")
             source = prop_data.get("source", "unknown")
@@ -152,7 +227,7 @@ class ScanEngine:
                     if prop_data.get("deal_type") == "sale" and prop_data.get("price"):
                         prop_data["loan_amount"] = max(0, prop_data["price"] - user_prefs.get("equity", 0))
                     prop_data["price_drop"] = True
-                    _enrich_property_insights(prop_data, city_avg, self.ai)
+                    _enrich_property_insights(prop_data, city_avg, self.ai, profile_type)
                     if not (prop_data.get("listing_url") or "").strip():
                         prop_data["listing_url"] = build_listing_url(
                             prop_data.get("source"), prop_data.get("source_id"), prop_data.get("deal_type")
@@ -175,7 +250,7 @@ class ScanEngine:
             )
             if prop_data.get("deal_type") == "sale" and prop_data.get("price"):
                 prop_data["loan_amount"] = max(0, prop_data["price"] - user_prefs.get("equity", 0))
-            _enrich_property_insights(prop_data, city_avg, self.ai)
+            _enrich_property_insights(prop_data, city_avg, self.ai, profile_type)
             if not (prop_data.get("listing_url") or "").strip():
                 prop_data["listing_url"] = build_listing_url(
                     prop_data.get("source"), prop_data.get("source_id"), prop_data.get("deal_type")

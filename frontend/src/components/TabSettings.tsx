@@ -20,6 +20,8 @@ export default function TabSettings({ user }: { user: User }) {
   const [targetCities, setTargetCities] = useState<string[]>(user.target_cities)
   const [citySearch, setCitySearch] = useState('')
   const [searchType, setSearchType] = useState(user.search_type)
+  const [profileType, setProfileType] = useState(user.profile_type ?? 'HOME_BUYER')
+  const [homeIndex, setHomeIndex] = useState(user.home_index ?? 1)
   const [equity, setEquity] = useState(user.equity)
   const [monthlyIncome, setMonthlyIncome] = useState(user.monthly_income)
   const [maxRepaymentRatio, setMaxRepaymentRatio] = useState(Math.round(user.max_repayment_ratio * 100))
@@ -50,6 +52,8 @@ export default function TabSettings({ user }: { user: User }) {
         name,
         target_cities: targetCities,
         search_type: searchType,
+        profile_type: profileType,
+        home_index: homeIndex,
         equity,
         monthly_income: monthlyIncome,
         room_range_min: roomRange[0],
@@ -146,6 +150,88 @@ export default function TabSettings({ user }: { user: User }) {
                 {o.label}
               </button>
             ))}
+          </div>
+        </div>
+        <div>
+          <label className={labelClass}>פרופיל החלטה</label>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+            <button
+              type="button"
+              onClick={() => setProfileType('HOME_BUYER')}
+              className={`px-3 py-2 rounded-xl border text-right ${
+                profileType === 'HOME_BUYER'
+                  ? 'border-teal-500 bg-teal-50 text-teal-800'
+                  : 'border-slate-200 bg-white text-slate-700'
+              }`}
+            >
+              <div className="font-semibold">קונה דירה ראשונה</div>
+              <div className="text-[11px] text-slate-500">מיקוד ביציבות והחזר חודשי</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setProfileType('INVESTOR')}
+              className={`px-3 py-2 rounded-xl border text-right ${
+                profileType === 'INVESTOR'
+                  ? 'border-teal-500 bg-teal-50 text-teal-800'
+                  : 'border-slate-200 bg-white text-slate-700'
+              }`}
+            >
+              <div className="font-semibold">משקיע מאוזן</div>
+              <div className="text-[11px] text-slate-500">תשואה + עליית ערך + נזילות</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setProfileType('CASH_FLOW_MAXIMIZER')}
+              className={`px-3 py-2 rounded-xl border text-right ${
+                profileType === 'CASH_FLOW_MAXIMIZER'
+                  ? 'border-teal-500 bg-teal-50 text-teal-800'
+                  : 'border-slate-200 bg-white text-slate-700'
+              }`}
+            >
+              <div className="font-semibold">מקסום תזרים</div>
+              <div className="text-[11px] text-slate-500">כמה כסף נשאר כל חודש</div>
+            </button>
+          </div>
+        </div>
+        <div>
+          <label className={labelClass}>סוג נכס מבחינת הבנק</label>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+            <button
+              type="button"
+              onClick={() => setHomeIndex(1)}
+              className={`px-3 py-2 rounded-xl border text-right ${
+                homeIndex === 1
+                  ? 'border-teal-500 bg-teal-50 text-teal-800'
+                  : 'border-slate-200 bg-white text-slate-700'
+              }`}
+            >
+              <div className="font-semibold">דירה ראשונה</div>
+              <div className="text-[11px] text-slate-500">עד 75% מימון (25% הון עצמי)</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setHomeIndex(2)}
+              className={`px-3 py-2 rounded-xl border text-right ${
+                homeIndex === 2
+                  ? 'border-teal-500 bg-teal-50 text-teal-800'
+                  : 'border-slate-200 bg-white text-slate-700'
+              }`}
+            >
+              <div className="font-semibold">דירה שנייה</div>
+              <div className="text-[11px] text-slate-500">בדרך־כלל עד 50% מימון</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setHomeIndex(3)}
+              className={`px-3 py-2 rounded-xl border text-right ${
+                homeIndex === 3
+                  ? 'border-teal-500 bg-teal-50 text-teal-800'
+                  : 'border-slate-200 bg-white text-slate-700'
+              }`}
+            >
+              <div className="font-semibold">דירה שלישית+</div>
+              <div className="text-[11px] text-slate-500">מיועדת כהשקעה / תזרים</div>
+            </button>
           </div>
         </div>
         <hr className="border-t border-slate-200 my-6" />

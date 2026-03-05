@@ -35,6 +35,10 @@ def update_me(
         update["target_cities"] = body.target_cities
     if body.search_type is not None:
         update["search_type"] = body.search_type
+    if body.profile_type is not None:
+        update["profile_type"] = body.profile_type
+    if body.home_index is not None:
+        update["home_index"] = body.home_index
     if body.equity is not None:
         update["equity"] = body.equity
     if body.monthly_income is not None:

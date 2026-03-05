@@ -45,6 +45,8 @@ export interface User {
   email: string;
   target_cities: string[];
   search_type: string;
+  profile_type: 'HOME_BUYER' | 'INVESTOR' | 'CASH_FLOW_MAXIMIZER';
+  home_index: number;
   equity: number;
   monthly_income: number;
   room_range_min: number;
@@ -79,6 +81,8 @@ export function register(body: {
   rent_room_range_max: number;
   max_rent: number | null;
   extra_preferences: string | null;
+  profile_type: User['profile_type'];
+  home_index: number;
 }): Promise<LoginRes> {
   return request<LoginRes>('/auth/register', {
     method: 'POST',
@@ -131,6 +135,8 @@ export interface Property {
   market_summary_text?: string;
   /** סכום המשכנתא (מחיר − הון עצמי), לפי חוק המשכנתא */
   loan_amount?: number;
+  /** הודעת הקשר לפי פרופיל (Home Buyer / Investor / Cash Flow) */
+  profile_area_message?: string;
 }
 
 export function getProperties(params?: { deal_type?: string; city?: string; limit?: number }): Promise<Property[]> {

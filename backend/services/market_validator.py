@@ -36,11 +36,18 @@ def _build_prompt(street_or_area: str, city: str, rooms_str: str, size_sqm: Opti
 
 Find the average price per square meter (מחיר למטר רבוע) for similar apartments in this street or area in 2024-2026. If you find only total sale prices, derive average per SQM if possible.
 
+Also estimate (if possible, based on data):
+- recent_appreciation_pct: approximate percentage price change for similar apartments in the last 3 years in this area
+- rent_range_min / rent_range_max: a reasonable monthly rent range (in ILS) for similar apartments in this area
+
 Reply with a JSON object only, no other text:
 {{
   "avg_price_per_sqm": <number in ILS, or null if not found>,
   "source_note": "<short Hebrew note about data source, e.g. רכוש המסים / Gov data>",
-  "confidence": <0-100 how reliable the data is>
+  "confidence": <0-100 how reliable the data is>,
+  "recent_appreciation_pct": <number or null>,
+  "rent_range_min": <number or null>,
+  "rent_range_max": <number or null>
 }}"""
 
 
@@ -157,6 +164,23 @@ def get_market_comparison(
         source_note = (parsed.get("source_note") or "נתוני מדינה").strip()
         data_confidence = min(100, max(0, int(parsed.get("confidence", 50))))
 
+        recent_app = parsed.get("recent_appreciation_pct")
+        try:
+            recent_app = float(recent_app) if recent_app is not None else None
+        except (TypeError, ValueError):
+            recent_app = None
+
+        rent_min = parsed.get("rent_range_min")
+        rent_max = parsed.get("rent_range_max")
+        try:
+            rent_min_f = float(rent_min) if rent_min is not None else None
+        except (TypeError, ValueError):
+            rent_min_f = None
+        try:
+            rent_max_f = float(rent_max) if rent_max is not None else None
+        except (TypeError, ValueError):
+            rent_max_f = None
+
         # Listing price per sqm (use size_sqm if available, else estimate from rooms)
         if size_sqm and size_sqm > 0:
             listing_per_sqm = price / size_sqm
@@ -180,6 +204,11 @@ def get_market_comparison(
             "market_avg_per_sqm": round(avg_sqm, 0),
             "price_deviation_pct": round(deviation_pct, 1),
             "market_summary_text": summary_text,
+            "recent_appreciation_pct": round(recent_app, 1) if isinstance(recent_app, (int, float)) else None,
+            "rent_range_min": rent_min_f,
+            "rent_range_max": rent_max_f,
+            "source_note": source_note,
+            "data_confidence": data_confidence,
         }
     except Exception as e:
         logger.warning(f"Market validator failed for {city} {street_or_area}: {e}")
@@ -198,3 +227,10 @@ def enrich_property_with_market(prop_data: dict, gemini_client, model_name: str 
     prop_data["market_avg_per_sqm"] = result["market_avg_per_sqm"]
     prop_data["price_deviation_pct"] = result["price_deviation_pct"]
     prop_data["market_summary_text"] = result["market_summary_text"]
+    # מידע נוסף לשימוש בפרופילים שונים / הסברים למשתמש
+    if "recent_appreciation_pct" in result:
+        prop_data["recent_appreciation_pct"] = result["recent_appreciation_pct"]
+    if "rent_range_min" in result:
+        prop_data["rent_range_min"] = result["rent_range_min"]
+    if "rent_range_max" in result:
+        prop_data["rent_range_max"] = result["rent_range_max"]

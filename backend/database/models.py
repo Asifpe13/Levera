@@ -13,6 +13,10 @@ class User(BaseModel):
     email: str
     target_cities: list[str] = []
     search_type: str = "both"  # "buy", "rent", "both"
+    # פרופיל החלטה: קונה דירה ראשונה / משקיע / מקסום תזרים
+    profile_type: str = "HOME_BUYER"  # "HOME_BUYER" | "INVESTOR" | "CASH_FLOW_MAXIMIZER"
+    # אינדקס דירה ביחס למשתמש: 1=דירה ראשונה, 2=שנייה, 3=שלישית+
+    home_index: int = 1
     extra_preferences: Optional[str] = None
     is_active: bool = True
     # ─── מכירה ───
@@ -77,6 +81,8 @@ class Property(BaseModel):
     market_avg_per_sqm: Optional[float] = None
     price_deviation_pct: Optional[float] = None  # % above/below area average
     market_summary_text: Optional[str] = None  # e.g. "Similar properties sold for ₪X per SQM (Gov data)"
+    # הודעת הקשר לפי פרופיל (Home Buyer / Investor / Cash Flow) שתציג "הוכחה מהשטח"
+    profile_area_message: Optional[str] = None
 
     email_sent: bool = False
     included_in_report: bool = False

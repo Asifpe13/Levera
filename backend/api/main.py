@@ -1,5 +1,5 @@
 """
-FastAPI backend for Aigent Real Estate.
+FastAPI backend for Levera — Real Estate Decision Intelligence.
 Run with: uvicorn api.main:app --reload --port 8000
 """
 import os
@@ -22,8 +22,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.routers import auth, user, properties, scan, market, config as config_router
 
 app = FastAPI(
-    title="Aigent Real Estate API",
-    description="Backend for React dashboard — auth, properties, scan, market trends",
+    title="Levera API",
+    description="Backend for Levera dashboard — auth, properties, scan, market trends",
     version="1.0.0",
 )
 

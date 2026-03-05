@@ -47,6 +47,8 @@ def register(body: RegisterRequest, db: DatabaseManager = Depends(get_db)):
         "max_rent": body.max_rent if body.max_rent and body.max_rent > 0 else None,
         "search_type": body.search_type,
         "extra_preferences": body.extra_preferences,
+        "profile_type": body.profile_type,
+        "home_index": body.home_index,
     })
     token = str(uuid.uuid4())
     expires_at = datetime.now(timezone.utc) + timedelta(days=7)

@@ -28,6 +28,8 @@ class RegisterRequest(BaseModel):
     rent_room_range_max: int = 5
     max_rent: Optional[int] = None
     extra_preferences: Optional[str] = None
+    profile_type: str = "HOME_BUYER"
+    home_index: int = 1
 
 
 class UserResponse(BaseModel):
@@ -35,6 +37,8 @@ class UserResponse(BaseModel):
     email: str
     target_cities: List[str]
     search_type: str
+    profile_type: str
+    home_index: int
     equity: float
     monthly_income: float
     room_range_min: int
@@ -54,6 +58,8 @@ class UserUpdateRequest(BaseModel):
     name: Optional[str] = None
     target_cities: Optional[List[str]] = None
     search_type: Optional[str] = None
+    profile_type: Optional[str] = None
+    home_index: Optional[int] = None
     equity: Optional[int] = None
     monthly_income: Optional[int] = None
     room_range_min: Optional[int] = None
@@ -72,6 +78,8 @@ def user_dict_to_response(d: dict) -> UserResponse:
         email=d.get("email", ""),
         target_cities=d.get("target_cities", []),
         search_type=d.get("search_type", "both"),
+        profile_type=d.get("profile_type", "HOME_BUYER"),
+        home_index=int(d.get("home_index", 1)),
         equity=float(d.get("equity", 0)),
         monthly_income=float(d.get("monthly_income", 0)),
         room_range_min=int(d.get("room_range_min", 1)),
