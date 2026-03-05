@@ -17,6 +17,8 @@ class User(BaseModel):
     profile_type: str = "HOME_BUYER"  # "HOME_BUYER" | "INVESTOR" | "CASH_FLOW_MAXIMIZER"
     # אינדקס דירה ביחס למשתמש: 1=דירה ראשונה, 2=שנייה, 3=שלישית+
     home_index: int = 1
+    # משך משכנתא מועדף בשנים (משפיע על ההחזר החודשי)
+    loan_term_years: int = 30
     extra_preferences: Optional[str] = None
     is_active: bool = True
     # ─── מכירה ───

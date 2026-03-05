@@ -47,6 +47,7 @@ export interface User {
   search_type: string;
   profile_type: 'HOME_BUYER' | 'INVESTOR' | 'CASH_FLOW_MAXIMIZER';
   home_index: number;
+  loan_term_years: number;
   equity: number;
   monthly_income: number;
   room_range_min: number;
@@ -83,6 +84,7 @@ export function register(body: {
   extra_preferences: string | null;
   profile_type: User['profile_type'];
   home_index: number;
+  loan_term_years: number;
 }): Promise<LoginRes> {
   return request<LoginRes>('/auth/register', {
     method: 'POST',

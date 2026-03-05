@@ -22,6 +22,7 @@ export default function TabSettings({ user }: { user: User }) {
   const [searchType, setSearchType] = useState(user.search_type)
   const [profileType, setProfileType] = useState(user.profile_type ?? 'HOME_BUYER')
   const [homeIndex, setHomeIndex] = useState(user.home_index ?? 1)
+  const [loanTermYears, setLoanTermYears] = useState(user.loan_term_years ?? 30)
   const [equity, setEquity] = useState(user.equity)
   const [monthlyIncome, setMonthlyIncome] = useState(user.monthly_income)
   const [maxRepaymentRatio, setMaxRepaymentRatio] = useState(Math.round(user.max_repayment_ratio * 100))
@@ -54,6 +55,7 @@ export default function TabSettings({ user }: { user: User }) {
         search_type: searchType,
         profile_type: profileType,
         home_index: homeIndex,
+        loan_term_years: loanTermYears,
         equity,
         monthly_income: monthlyIncome,
         room_range_min: roomRange[0],
@@ -249,6 +251,24 @@ export default function TabSettings({ user }: { user: User }) {
         <div>
           <label className={labelClass}>אחוז החזר מקסימלי</label>
           <input type="number" className={inputClass} min={20} max={50} value={maxRepaymentRatio} onChange={(e) => setMaxRepaymentRatio(Number(e.target.value))} />
+        </div>
+        <div>
+          <label className={labelClass}>משך משכנתא מועדף (שנים)</label>
+          <div className="flex items-center gap-3">
+            <input
+              type="range"
+              min={10}
+              max={35}
+              step={5}
+              value={loanTermYears}
+              onChange={(e) => setLoanTermYears(Number(e.target.value))}
+              className="w-full accent-teal-600"
+            />
+            <span className="text-xs text-slate-600 whitespace-nowrap">{loanTermYears} שנה</span>
+          </div>
+          <p className="mt-1 text-[11px] text-slate-500">
+            Levera תחשב את ההחזר החודשי לפי מספר השנים שבחרת.
+          </p>
         </div>
         <div>
           <label className={labelClass}>חדרים (מכירה)</label>

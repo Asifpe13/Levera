@@ -163,6 +163,7 @@ class ScanEngine:
             "search_type": search_type,
             "profile_type": user.get("profile_type", "HOME_BUYER"),
             "home_index": int(user.get("home_index", 1)),
+            "loan_term_years": int(user.get("loan_term_years", 30)),
             "equity": user.get("equity", 0),
             "monthly_income": user.get("monthly_income", 0),
             "room_range_min": user.get("room_range_min", 1),

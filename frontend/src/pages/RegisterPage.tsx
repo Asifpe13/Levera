@@ -27,6 +27,7 @@ export default function RegisterPage() {
   const [searchType, setSearchType] = useState<'both' | 'buy' | 'rent'>('both')
   const [profileType, setProfileType] = useState<'HOME_BUYER' | 'INVESTOR' | 'CASH_FLOW_MAXIMIZER'>('HOME_BUYER')
   const [homeIndex, setHomeIndex] = useState<1 | 2 | 3>(1)
+  const [loanTermYears, setLoanTermYears] = useState(30)
   const [roomRange, setRoomRange] = useState<[number, number]>([3, 5])
   const [maxPrice, setMaxPrice] = useState(0)
   const [rentRoomRange, setRentRoomRange] = useState<[number, number]>([2, 5])
@@ -67,6 +68,7 @@ export default function RegisterPage() {
         extra_preferences: extraPreferences || null,
         profile_type: profileType,
         home_index: homeIndex,
+        loan_term_years: loanTermYears,
       })
       if (res.token) {
         setToken(res.token)
@@ -206,6 +208,24 @@ export default function RegisterPage() {
                   className="w-full accent-teal-600"
                 />
                 <span className="text-xs text-slate-600">{maxRepaymentRatio}%</span>
+              </div>
+              <div className="mt-4">
+                <label className={labelClass}>משך משכנתא מועדף (שנים)</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min={10}
+                    max={35}
+                    step={5}
+                    value={loanTermYears}
+                    onChange={(e) => setLoanTermYears(Number(e.target.value))}
+                    className="w-full accent-teal-600"
+                  />
+                  <span className="text-xs text-slate-600 whitespace-nowrap">{loanTermYears} שנה</span>
+                </div>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  משכנתא ארוכה יותר מורידה החזר חודשי אך מגדילה סך הריבית לאורך השנים.
+                </p>
               </div>
             </div>
 

@@ -30,6 +30,7 @@ class RegisterRequest(BaseModel):
     extra_preferences: Optional[str] = None
     profile_type: str = "HOME_BUYER"
     home_index: int = 1
+    loan_term_years: int = 30
 
 
 class UserResponse(BaseModel):
@@ -39,6 +40,7 @@ class UserResponse(BaseModel):
     search_type: str
     profile_type: str
     home_index: int
+    loan_term_years: int
     equity: float
     monthly_income: float
     room_range_min: int
@@ -60,6 +62,7 @@ class UserUpdateRequest(BaseModel):
     search_type: Optional[str] = None
     profile_type: Optional[str] = None
     home_index: Optional[int] = None
+    loan_term_years: Optional[int] = None
     equity: Optional[int] = None
     monthly_income: Optional[int] = None
     room_range_min: Optional[int] = None
@@ -80,6 +83,7 @@ def user_dict_to_response(d: dict) -> UserResponse:
         search_type=d.get("search_type", "both"),
         profile_type=d.get("profile_type", "HOME_BUYER"),
         home_index=int(d.get("home_index", 1)),
+        loan_term_years=int(d.get("loan_term_years", 30)),
         equity=float(d.get("equity", 0)),
         monthly_income=float(d.get("monthly_income", 0)),
         room_range_min=int(d.get("room_range_min", 1)),

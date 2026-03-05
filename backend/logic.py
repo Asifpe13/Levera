@@ -118,6 +118,8 @@ def check_property_fit(property_data: dict, user_data: dict) -> tuple[bool, str 
     equity = user_data.get("equity", 0)
     income = user_data.get("monthly_income", 0)
     ratio = user_data.get("max_repayment_ratio", 0.4)
+    # משך משכנתא מועדף בשנים (אם לא סופק, ברירת המחדל מהשוק)
+    years = int(user_data.get("loan_term_years") or MARKET_SETTINGS["loan_term_years"])
 
     # חוק המשכנתא בישראל:
     # - דירה ראשונה: ~75% מימון (25% הון עצמי)
@@ -138,7 +140,7 @@ def check_property_fit(property_data: dict, user_data: dict) -> tuple[bool, str 
     if not income or income <= 0:
         return False, "לא ניתן לבדוק התאמה למשכנתא ללא הכנסה חודשית (בנקים מגבילים החזר לאחוז מההכנסה)"
 
-    repayment = calculate_monthly_repayment(price, equity)
+    repayment = calculate_monthly_repayment(price, equity, years=years)
     max_repayment = income * ratio
     if repayment > max_repayment:
         return False, (
