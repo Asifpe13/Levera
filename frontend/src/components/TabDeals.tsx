@@ -171,8 +171,8 @@ export default function TabDeals({ user }: { user: User }) {
               </button>
               {showLogDetail && (
                 <div className="mt-3 p-4 rounded-xl bg-slate-50 border border-slate-200 max-h-56 overflow-auto font-mono text-xs text-slate-600">
-                  {scanLog.map((line, i) => (
-                    <div key={i} className={line.level === 'error' ? 'text-red-600' : ''}>
+                  {scanLog.map((line, idx) => (
+                    <div key={idx} className={line.level === 'error' ? 'text-red-600' : ''}>
                       {line.time && <span className="text-slate-400 mr-2">{line.time}</span>}
                       {line.message}
                     </div>
@@ -182,7 +182,7 @@ export default function TabDeals({ user }: { user: User }) {
             </>
           ) : (
             <div className="text-red-600 text-sm">
-              {scanLog.map((l, i) => l.message).join(' ')}
+              {scanLog.map((l) => l.message).join(' ')}
             </div>
           )}
         </div>
