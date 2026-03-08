@@ -27,14 +27,21 @@ app = FastAPI(
     version="1.0.0",
 )
 
+# CORS: allow local dev + Vercel frontend (and optional CORS_ORIGINS env)
+_cors_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://levera-frontend-six.vercel.app",
+    "https://levera-frontend-qtsfyd012-asifpe13s-projects.vercel.app",
+]
+_extra = os.getenv("CORS_ORIGINS", "").strip()
+if _extra:
+    _cors_origins.extend(s.strip() for s in _extra.split(",") if s.strip())
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -46,6 +53,11 @@ app.include_router(properties.router, prefix="/properties", tags=["properties"])
 app.include_router(scan.router, prefix="/scan", tags=["scan"])
 app.include_router(market.router, prefix="/market", tags=["market"])
 app.include_router(config_router.router, prefix="/config", tags=["config"])
+
+
+@app.get("/")
+def root():
+    return {"message": "Levera API", "docs": "/docs", "health": "/health"}
 
 
 @app.get("/health")
