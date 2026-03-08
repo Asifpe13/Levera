@@ -27,14 +27,12 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# CORS: allow local dev + Vercel frontend (and optional CORS_ORIGINS env)
+# CORS: local dev + any Vercel deployment (*.vercel.app) + optional CORS_ORIGINS
 _cors_origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "https://levera-frontend-six.vercel.app",
-    "https://levera-frontend-qtsfyd012-asifpe13s-projects.vercel.app",
 ]
 _extra = os.getenv("CORS_ORIGINS", "").strip()
 if _extra:
@@ -42,6 +40,7 @@ if _extra:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",  # all Vercel frontends
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
