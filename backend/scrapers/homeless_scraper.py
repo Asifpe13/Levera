@@ -1,13 +1,16 @@
 """
-Homeless.co.il scraper — uses curl_cffi to bypass bot protection.
-Parses property listings from search result pages.
+Homeless.co.il scraper — uses curl_cffi (chrome120 TLS fingerprint) to bypass
+bot protection. On 403, clears the session, waits 10 seconds, and retries
+with a fresh User-Agent.
 """
+import random
 import re
 import time
 from typing import Optional
 
 from loguru import logger
 
+from scrapers._http import browser_headers, random_ua
 from scrapers.base_scraper import BaseScraper
 
 DEAL_PATHS = {"sale": "sale", "rent": "rent"}
@@ -23,12 +26,26 @@ class HomelessScraper(BaseScraper):
         self.deal_path = DEAL_PATHS.get(deal_type, "sale")
         self._session = None
 
+    # ------------------------------------------------------------------
+    # Session: fresh TLS fingerprint + browser headers on every new session
+    # ------------------------------------------------------------------
+
+    def _make_session(self):
+        from curl_cffi import requests as curl_requests
+        ua = random_ua()
+        session = curl_requests.Session(impersonate="chrome120")
+        session.headers.update(browser_headers(ua))
+        return session
+
     @property
     def session(self):
         if self._session is None:
-            from curl_cffi import requests as curl_requests
-            self._session = curl_requests.Session(impersonate="chrome120")
+            self._session = self._make_session()
         return self._session
+
+    # ------------------------------------------------------------------
+    # Public search
+    # ------------------------------------------------------------------
 
     def search(self, city: str, rooms_min: int = 1, rooms_max: int = 8,
                price_max: Optional[float] = None, page: int = 1) -> list[dict]:
@@ -37,25 +54,40 @@ class HomelessScraper(BaseScraper):
         if page > 1:
             params["page"] = page
 
-        for attempt in range(2):
+        for attempt in range(3):
             try:
-                time.sleep(self.delay + attempt * 1.5)
+                # Human-like random delay; extra back-off on retries
+                time.sleep(random.uniform(3, 7) + attempt * 2)
+
                 resp = self.session.get(url, params=params, timeout=25)
+
                 if resp.status_code == 403:
-                    logger.warning(f"[homeless] Blocked (403) for {city}, retrying with new session...")
-                    self._session = None
-                    time.sleep(3)
+                    logger.warning(
+                        f"[homeless] Blocked (403) for {city} "
+                        f"(attempt {attempt + 1}/3) — clearing session, waiting 10s"
+                    )
+                    self._session = None   # discard cookies/session state
+                    time.sleep(10)         # mandatory cool-down before retry
                     continue
+
                 if resp.status_code != 200:
                     logger.warning(f"[homeless] HTTP {resp.status_code} for {city}")
                     return []
+
                 return self._parse_listings(resp.text, city, rooms_min, rooms_max, price_max)
+
             except Exception as e:
-                logger.warning(f"[homeless] Request failed for {city}: {e}")
-                if attempt == 0:
-                    self._session = None
-                    time.sleep(2)
+                logger.warning(f"[homeless] Request failed for {city} (attempt {attempt + 1}/3): {e}")
+                self._session = None
+                if attempt < 2:
+                    time.sleep(random.uniform(2, 5))
+
+        logger.error(f"[homeless] All attempts failed for {city}")
         return []
+
+    # ------------------------------------------------------------------
+    # HTML parsing
+    # ------------------------------------------------------------------
 
     def _parse_listings(self, html: str, city: str,
                         rooms_min: int, rooms_max: int,
@@ -70,7 +102,7 @@ class HomelessScraper(BaseScraper):
         links = main.find_all("a", href=re.compile(r"/(?:sale|rent)/viewad,\d+\.aspx"))
 
         properties = []
-        seen_ids = set()
+        seen_ids: set = set()
 
         for link in links[:40]:
             try:

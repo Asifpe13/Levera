@@ -1,16 +1,21 @@
 """
-WinWin.co.il scraper — uses curl_cffi for TLS, HTML/JSON parsing.
+WinWin.co.il scraper — uses curl_cffi (chrome120 TLS fingerprint).
+Retries up to 3 times with exponential back-off on failure.
 """
 import json
+import random
 import re
 import time
 from typing import Optional
 
 from loguru import logger
 
+from scrapers._http import browser_headers, random_ua
 from scrapers.base_scraper import BaseScraper
 
 DEAL_PATHS = {"sale": "ForSale", "rent": "ForRent"}
+_TIMEOUT = 30
+_MAX_ATTEMPTS = 3
 
 
 class WinWinScraper(BaseScraper):
@@ -23,12 +28,26 @@ class WinWinScraper(BaseScraper):
         self.deal_path = DEAL_PATHS.get(deal_type, "ForSale")
         self._session = None
 
+    # ------------------------------------------------------------------
+    # Session: fresh TLS fingerprint + browser headers on every new session
+    # ------------------------------------------------------------------
+
+    def _make_session(self):
+        from curl_cffi import requests as curl_requests
+        ua = random_ua()
+        session = curl_requests.Session(impersonate="chrome120")
+        session.headers.update(browser_headers(ua))
+        return session
+
     @property
     def session(self):
         if self._session is None:
-            from curl_cffi import requests as curl_requests
-            self._session = curl_requests.Session(impersonate="chrome120")
+            self._session = self._make_session()
         return self._session
+
+    # ------------------------------------------------------------------
+    # Public search — with exponential back-off retry
+    # ------------------------------------------------------------------
 
     def search(self, city: str, rooms_min: int = 1, rooms_max: int = 8,
                price_max: Optional[float] = None, page: int = 1) -> list[dict]:
@@ -43,27 +62,49 @@ class WinWinScraper(BaseScraper):
         if price_max:
             params["iPriceMax"] = int(price_max)
 
-        try:
-            time.sleep(self.delay)
-            resp = self.session.get(url, params=params, timeout=28)
-            if resp.status_code != 200:
-                logger.warning(f"[winwin] HTTP {resp.status_code} for {city}")
-                return []
+        for attempt in range(_MAX_ATTEMPTS):
+            # Human-like base delay + exponential back-off on retries
+            wait = random.uniform(3, 7) + (2 ** attempt - 1)
+            time.sleep(wait)
 
-            content_type = resp.headers.get("content-type", "")
-            if "json" in content_type:
-                try:
-                    return self._parse_json(resp.json(), city)
-                except Exception:
-                    pass
-            return self._parse_html(resp.text, city)
-        except Exception as e:
-            err_str = str(e).lower()
-            if "timeout" in err_str or "timed out" in err_str:
-                logger.warning(f"[winwin] Timeout for {city}")
-            else:
-                logger.warning(f"[winwin] Request failed for {city}: {e}")
-            return []
+            try:
+                resp = self.session.get(url, params=params, timeout=_TIMEOUT)
+
+                if resp.status_code != 200:
+                    logger.warning(
+                        f"[winwin] HTTP {resp.status_code} for {city} "
+                        f"(attempt {attempt + 1}/{_MAX_ATTEMPTS})"
+                    )
+                    self._session = None
+                    continue
+
+                content_type = resp.headers.get("content-type", "")
+                if "json" in content_type:
+                    try:
+                        return self._parse_json(resp.json(), city)
+                    except Exception:
+                        pass
+                return self._parse_html(resp.text, city)
+
+            except Exception as e:
+                err_str = str(e).lower()
+                if "timeout" in err_str or "timed out" in err_str:
+                    logger.warning(
+                        f"[winwin] Timeout for {city} (attempt {attempt + 1}/{_MAX_ATTEMPTS})"
+                    )
+                else:
+                    logger.warning(
+                        f"[winwin] Request failed for {city} "
+                        f"(attempt {attempt + 1}/{_MAX_ATTEMPTS}): {e}"
+                    )
+                self._session = None  # fresh session/UA on each retry
+
+        logger.error(f"[winwin] All {_MAX_ATTEMPTS} attempts failed for {city}")
+        return []
+
+    # ------------------------------------------------------------------
+    # JSON response parsing
+    # ------------------------------------------------------------------
 
     def _parse_json(self, data, city: str) -> list[dict]:
         if isinstance(data, list):
@@ -141,6 +182,10 @@ class WinWinScraper(BaseScraper):
             "has_mamad": 'ממ"ד' in raw_str or "ממד" in raw_str,
             "raw_data": raw,
         }
+
+    # ------------------------------------------------------------------
+    # HTML response parsing
+    # ------------------------------------------------------------------
 
     def _parse_html(self, html: str, city: str) -> list[dict]:
         from bs4 import BeautifulSoup

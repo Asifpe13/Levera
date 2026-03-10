@@ -1,19 +1,22 @@
 """
-Yad2 scraper — uses curl_cffi for TLS fingerprint impersonation
-to bypass ShieldSquare bot protection. Parses __NEXT_DATA__ from
-server-rendered HTML.
+Yad2 scraper — uses curl_cffi (chrome120 TLS fingerprint) to bypass
+ShieldSquare/bot protection. Parses __NEXT_DATA__ from server-rendered HTML.
+Falls back to the Yad2 gateway API on captcha detection.
 """
 import json
+import random
 import re
 import time
 from typing import Optional
 
 from loguru import logger
 
+from scrapers._http import browser_headers, random_ua
 from scrapers.base_scraper import BaseScraper
 from scrapers.city_codes import CITY_TO_YAD2_CODE, CITY_TO_YAD2_RENT_CODE, YAD2_RENT_TOP_AREA
 
 DEAL_MAP = {"sale": "forsale", "rent": "rent"}
+_MOBILE_API = "https://gw.yad2.co.il/feed-search/realestate/{deal_slug}"
 
 
 class Yad2ApiScraper(BaseScraper):
@@ -25,16 +28,31 @@ class Yad2ApiScraper(BaseScraper):
         self.deal_slug = DEAL_MAP.get(deal_type, "forsale")
         self._session = None
 
+    # ------------------------------------------------------------------
+    # Session: fresh TLS fingerprint + browser headers on every new session
+    # ------------------------------------------------------------------
+
+    def _make_session(self):
+        from curl_cffi import requests as curl_requests
+        ua = random_ua()
+        session = curl_requests.Session(impersonate="chrome120")
+        session.headers.update(browser_headers(ua))
+        return session
+
     @property
     def session(self):
         if self._session is None:
-            from curl_cffi import requests as curl_requests
-            self._session = curl_requests.Session(impersonate="chrome")
+            self._session = self._make_session()
         return self._session
+
+    # ------------------------------------------------------------------
+    # Public search
+    # ------------------------------------------------------------------
 
     def search(self, city: str, rooms_min: int = 1, rooms_max: int = 8,
                price_max: Optional[float] = None, page: int = 1) -> list[dict]:
-        time.sleep(self.delay)
+        # Human-like random delay between city/page requests
+        time.sleep(random.uniform(3, 7))
 
         is_rent = self.deal_type == "rent"
         city_code = (CITY_TO_YAD2_RENT_CODE if is_rent else CITY_TO_YAD2_CODE).get(city)
@@ -62,7 +80,7 @@ class Yad2ApiScraper(BaseScraper):
 
         url = f"https://www.yad2.co.il/realestate/{self.deal_slug}"
         try:
-            resp = self.session.get(url, params=params)
+            resp = self.session.get(url, params=params, timeout=28)
             if resp.status_code != 200:
                 logger.warning(f"[yad2] HTTP {resp.status_code} for {city}")
                 return []
@@ -70,12 +88,58 @@ class Yad2ApiScraper(BaseScraper):
             logger.error(f"[yad2] Request failed for {city}: {e}")
             return []
 
-        return self._parse_next_data(resp.text, city)
+        listings = self._parse_next_data(resp.text, city)
 
-    def _parse_next_data(self, html: str, city: str) -> list[dict]:
-        if "captcha" in html[:2000].lower() or "shieldsquare" in html[:2000].lower():
-            logger.warning(f"[yad2] Captcha detected for {city}")
+        # Captcha detected → attempt mobile gateway API fallback
+        if listings is None:
+            listings = self._mobile_api_fallback(city, params)
+
+        return listings or []
+
+    # ------------------------------------------------------------------
+    # Mobile API fallback
+    # ------------------------------------------------------------------
+
+    def _mobile_api_fallback(self, city: str, params: dict) -> list[dict]:
+        """Try the Yad2 mobile/gateway API when the main page returns a captcha."""
+        logger.info(f"[yad2] Trying mobile API fallback for {city}")
+        # Slightly vary params to avoid identical fingerprint
+        params = dict(params)
+        params["forceLdLoad"] = 1
+
+        url = _MOBILE_API.format(deal_slug=self.deal_slug)
+        self._session = None  # reset session with a fresh UA
+        try:
+            time.sleep(random.uniform(4, 8))
+            resp = self.session.get(url, params=params, timeout=28)
+            if resp.status_code != 200:
+                logger.warning(f"[yad2] Mobile API HTTP {resp.status_code} for {city}")
+                return []
+            try:
+                data = resp.json()
+            except Exception:
+                return []
+            items = []
+            for bucket in ("private", "agency", "platinum", "feed_items", "items"):
+                bucket_data = data.get(bucket) or data.get("data", {}).get(bucket, [])
+                if isinstance(bucket_data, list):
+                    items.extend(bucket_data)
+            if not items and isinstance(data, list):
+                items = data
+            return [p for p in (self._normalize(i, city) for i in items) if p]
+        except Exception as e:
+            logger.warning(f"[yad2] Mobile API fallback failed for {city}: {e}")
             return []
+
+    # ------------------------------------------------------------------
+    # HTML parsing
+    # ------------------------------------------------------------------
+
+    def _parse_next_data(self, html: str, city: str) -> list[dict] | None:
+        """Returns None (not []) specifically when captcha is detected so caller can fallback."""
+        if "captcha" in html[:2000].lower() or "shieldsquare" in html[:2000].lower():
+            logger.warning(f"[yad2] Captcha/bot-gate detected for {city} — switching to mobile API")
+            return None  # signal to caller to attempt fallback
 
         match = re.search(
             r'<script[^>]*id="__NEXT_DATA__"[^>]*>(.*?)</script>',
@@ -138,6 +202,10 @@ class Yad2ApiScraper(BaseScraper):
                 if found:
                     return found
         return []
+
+    # ------------------------------------------------------------------
+    # Normalization
+    # ------------------------------------------------------------------
 
     def _normalize(self, raw: dict, city: str) -> Optional[dict]:
         token = str(raw.get("token") or raw.get("id") or "").strip()
