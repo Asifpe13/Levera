@@ -175,6 +175,7 @@ ALL_CITIES = [
     "תל מונד",
 ]
 
+# Keys below match Render environment variables (sync with Render dashboard)
 MIN_AI_SCORE_FOR_ALERT = int(os.getenv("MIN_AI_SCORE_FOR_ALERT", "40"))
 SCAN_INTERVAL_MINUTES = int(os.getenv("SCAN_INTERVAL_MINUTES", "60"))
 # Delay (seconds) between Gemini API calls during scan to avoid 429 rate limit (free tier)

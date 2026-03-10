@@ -56,6 +56,7 @@ app.include_router(config_router.router, prefix="/config", tags=["config"])
 
 @app.get("/")
 def root():
+    """Root endpoint for health checks and keep-alive pings (e.g. GitHub Actions). Returns 200 OK."""
     return {"message": "Levera API", "docs": "/docs", "health": "/health"}
 
 
