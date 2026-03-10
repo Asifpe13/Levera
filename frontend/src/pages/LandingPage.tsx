@@ -8,44 +8,45 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50/40 to-slate-100 flex flex-col">
       <header className="w-full border-b border-slate-200/70 bg-white/80 backdrop-blur">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-teal-600 text-white flex items-center justify-center font-black text-lg shadow-md shadow-teal-900/30">
+        <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-teal-600 text-white flex items-center justify-center font-black text-base sm:text-lg shadow-md shadow-teal-900/30 flex-shrink-0">
               L
             </div>
-            <div>
-              <div className="font-semibold text-slate-800 text-base">Levera</div>
-              <div className="text-[11px] text-slate-500">
+            <div className="min-w-0">
+              <div className="font-semibold text-slate-800 text-sm sm:text-base">Levera</div>
+              <div className="text-[10px] sm:text-[11px] text-slate-500 hidden xs:block">
                 סוכן נדל״ן AI · קונה דירה / משקיע
               </div>
             </div>
           </div>
-          <nav className="flex items-center gap-4 text-sm">
+          <nav className="flex items-center gap-2 sm:gap-4 text-sm flex-shrink-0">
             <button
               type="button"
               onClick={() => navigate('/login')}
-              className="levera-btn levera-btn-secondary"
+              className="levera-btn levera-btn-secondary text-xs sm:text-sm px-3 sm:px-4 py-2"
             >
               כניסה
             </button>
             <button
               type="button"
               onClick={() => navigate('/register')}
-              className="levera-btn levera-btn-primary"
+              className="levera-btn levera-btn-primary text-xs sm:text-sm px-3 sm:px-4 py-2"
             >
-              הפעל את הסוכן בחינם
+              <span className="hidden sm:inline">הפעל את הסוכן בחינם</span>
+              <span className="sm:hidden">הרשמה</span>
             </button>
           </nav>
         </div>
       </header>
 
       <main className="flex-1">
-        <section className="max-w-6xl mx-auto px-6 py-10 md:py-14 grid md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-10 items-center">
+        <section className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-10 md:py-14 grid md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-8 md:gap-10 items-center">
           <div>
             <p className="text-xs font-semibold text-teal-700 tracking-wide mb-3">
               LEVERA · REAL ESTATE INTELLIGENCE
             </p>
-            <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold text-slate-900 leading-tight mb-4">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold text-slate-900 leading-tight mb-4">
               הסוכן החכם שמסנן
               <span className="text-teal-600"> את כל השטויות</span>
               <br />
@@ -157,7 +158,7 @@ export default function LandingPage() {
         </section>
 
         <section className="border-t border-slate-200/80 bg-white/70">
-          <div className="max-w-6xl mx-auto px-6 py-8 grid md:grid-cols-3 gap-6 text-sm">
+          <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-8 grid sm:grid-cols-2 md:grid-cols-3 gap-6 text-sm">
             <div>
               <h3 className="levera-section-title text-base mb-2">איך זה עובד?</h3>
               <p className="text-slate-600 leading-relaxed">
@@ -189,7 +190,7 @@ export default function LandingPage() {
       </main>
 
       <footer className="border-t border-slate-200 bg-white/80">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
+        <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
           <span>Levera · Real Estate Decision Intelligence © 2026</span>
           <span>בנוי עבור שוק הנדל״ן הישראלי · Asif Perets</span>
         </div>

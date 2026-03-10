@@ -32,15 +32,15 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50 flex items-center justify-center px-4 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50 flex items-center justify-center px-4 py-10 sm:py-8">
       <button
         type="button"
         onClick={() => navigate('/')}
-        className="absolute top-4 left-4 md:top-6 md:left-6 text-xs md:text-sm text-slate-100/80 hover:text-white bg-slate-900/50 border border-slate-700/70 rounded-full px-3 py-1 shadow-sm"
+        className="absolute top-4 left-4 md:top-6 md:left-6 text-xs md:text-sm text-slate-100/80 hover:text-white bg-slate-900/50 border border-slate-700/70 rounded-full px-3 py-1 shadow-sm z-10"
       >
         ← חזרה לעמוד הראשי
       </button>
-      <div className="w-full max-w-5xl grid md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-8 items-stretch">
+      <div className="w-full max-w-5xl mx-auto grid md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-6 md:gap-8 items-stretch mt-8 md:mt-0">
         {/* Brand / story column */}
         <div className="hidden md:flex flex-col justify-between rounded-3xl bg-gradient-to-b from-teal-500 via-teal-600 to-emerald-600 p-7 shadow-[0_24px_80px_rgba(15,23,42,0.7)] border border-teal-300/40">
           <div>
@@ -95,7 +95,7 @@ export default function LoginPage() {
         </div>
 
         {/* Login card */}
-        <div className="levera-card rounded-3xl p-7 md:p-8 bg-white/95 backdrop-blur border-slate-200/90 shadow-[0_18px_50px_rgba(15,23,42,0.22)]">
+        <div className="levera-card rounded-2xl sm:rounded-3xl p-5 sm:p-7 md:p-8 bg-white/95 backdrop-blur border-slate-200/90 shadow-[0_18px_50px_rgba(15,23,42,0.22)] w-full">
           <div className="mb-6 flex justify-between items-center gap-3">
             <div>
               <p className="text-[11px] font-semibold text-teal-600 mb-1 uppercase tracking-[0.16em]">
