@@ -141,11 +141,17 @@ export interface Property {
   profile_area_message?: string;
 }
 
-export function getProperties(params?: { deal_type?: string; city?: string; limit?: number }): Promise<Property[]> {
+export function getProperties(params?: {
+  deal_type?: string;
+  city?: string;
+  limit?: number;
+  view?: 'latest' | 'all';
+}): Promise<Property[]> {
   const q: Record<string, string> = {};
   if (params?.deal_type) q.deal_type = params.deal_type;
   if (params?.city) q.city = params.city;
   if (params?.limit) q.limit = String(params.limit);
+  if (params?.view) q.view = params.view;
   return request<Property[]>('/properties/', { params: q }).then((r) => (Array.isArray(r) ? r : []));
 }
 

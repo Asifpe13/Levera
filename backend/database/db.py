@@ -217,6 +217,24 @@ class DatabaseManager:
             .limit(limit)
         )
 
+    def get_latest_scan_properties(self, user_email: str, limit: int = 50) -> list[dict]:
+        """Return properties from the most recent scan session (grouped by found_at proximity)."""
+        latest_search = self.searches.find_one(
+            {"user_email": user_email},
+            sort=[("executed_at", DESCENDING)],
+        )
+        if not latest_search:
+            return []
+        cutoff = latest_search["executed_at"] - timedelta(minutes=5)
+        return list(
+            self.properties.find({
+                "matched_user_email": user_email,
+                "found_at": {"$gte": cutoff},
+            })
+            .sort("found_at", DESCENDING)
+            .limit(limit)
+        )
+
     def get_avg_price_per_room_by_city(self, user_email: Optional[str] = None) -> dict[str, float]:
         """Average price per room by city (for Smart Value Estimator). Optional filter by user."""
         match = {"rooms": {"$gt": 0}, "price": {"$gt": 0}}

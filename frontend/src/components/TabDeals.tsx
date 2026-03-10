@@ -4,17 +4,20 @@ import { getProperties, runScan, requestWeeklyReport } from '../api'
 import PropertyCard from './PropertyCard'
 import { AgentIcon } from './illustrations'
 
+type ViewMode = 'latest' | 'all'
+
 const DEAL_OPTS = [
   { value: '', label: 'הכל' },
   { value: 'sale', label: 'מכירה' },
   { value: 'rent', label: 'שכירות' },
 ]
 
-const pillBase = 'px-3 py-2 rounded-full text-sm font-medium transition-colors'
+const pillBase = 'px-3 py-1.5 rounded-full text-sm font-medium transition-colors whitespace-nowrap'
 const pillActive = 'bg-teal-600 text-white'
 const pillInactive = 'bg-slate-100 text-slate-600 hover:bg-slate-200'
 
 export default function TabDeals({ user }: { user: User }) {
+  const [viewMode, setViewMode] = useState<ViewMode>('latest')
   const [properties, setProperties] = useState<Property[]>([])
   const [loading, setLoading] = useState(true)
   const [dealFilter, setDealFilter] = useState('')
@@ -28,13 +31,14 @@ export default function TabDeals({ user }: { user: User }) {
   const [weeklyReportLoading, setWeeklyReportLoading] = useState(false)
   const [weeklyReportToast, setWeeklyReportToast] = useState('')
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (mode: ViewMode = viewMode) => {
     setLoading(true)
     try {
       const list = await getProperties({
         deal_type: dealFilter || undefined,
         city: cityFilter || undefined,
         limit: 50,
+        view: mode,
       })
       setProperties(list)
       const citySet = new Set(list.map((p) => (p.city || '').trim()).filter(Boolean))
@@ -42,11 +46,11 @@ export default function TabDeals({ user }: { user: User }) {
     } finally {
       setLoading(false)
     }
-  }, [dealFilter, cityFilter])
+  }, [dealFilter, cityFilter, viewMode])
 
   useEffect(() => {
-    load()
-  }, [load])
+    load(viewMode)
+  }, [load, viewMode])
 
   const filteredByCity =
     cityFilter && cityFilter !== 'הכל'
@@ -63,10 +67,10 @@ export default function TabDeals({ user }: { user: User }) {
       setScanLog(res.log)
       setScanSummary({ total_found: res.total_found, total_matches: res.total_matches })
       setToast('הסריקה הושלמה — ' + res.total_matches + ' התאמות חדשות')
-      load()
+      load('latest')
+      setViewMode('latest')
     } catch (err) {
       setScanLog([{ time: '', level: 'error', message: err instanceof Error ? err.message : 'שגיאה' }])
-      setScanSummary(null)
     } finally {
       setScanning(false)
     }
@@ -77,11 +81,13 @@ export default function TabDeals({ user }: { user: User }) {
     setWeeklyReportLoading(true)
     try {
       const res = await requestWeeklyReport()
-      if (res.ok) {
-        setWeeklyReportToast(res.properties_count > 0 ? `הדוח השבועי נשלח למייל (${res.properties_count} דירות)` : 'הדוח השבועי נשלח למייל')
-      } else {
-        setWeeklyReportToast(res.message || 'שגיאה בהפקת הדוח')
-      }
+      setWeeklyReportToast(
+        res.ok
+          ? res.properties_count > 0
+            ? `הדוח השבועי נשלח למייל (${res.properties_count} דירות)`
+            : 'הדוח השבועי נשלח למייל'
+          : res.message || 'שגיאה בהפקת הדוח'
+      )
     } catch (err) {
       setWeeklyReportToast(err instanceof Error ? err.message : 'שגיאה בהפקת הדוח')
     } finally {
@@ -94,41 +100,44 @@ export default function TabDeals({ user }: { user: User }) {
   const maxRepay = Math.round(user.monthly_income * user.max_repayment_ratio)
 
   return (
-    <>
-      <div className="bg-gradient-to-l from-teal-50 to-white rounded-2xl border-2 border-teal-100 shadow-md p-6 mb-6 flex flex-wrap gap-6 items-start">
-        <div className="shrink-0 w-14 h-14 rounded-2xl bg-teal-100 text-teal-600 flex items-center justify-center">
-          <AgentIcon className="w-8 h-8" />
+    <div className="space-y-5">
+      {/* Agent summary card */}
+      <div className="bg-gradient-to-l from-teal-50 to-white rounded-2xl border-2 border-teal-100 shadow-sm p-4 sm:p-6 flex gap-4 items-start">
+        <div className="hidden sm:flex shrink-0 w-12 h-12 rounded-2xl bg-teal-100 text-teal-600 items-center justify-center">
+          <AgentIcon className="w-7 h-7" />
         </div>
         <div className="min-w-0 flex-1">
-        <h2 className="text-xl font-bold text-slate-800 mb-1">הסוכן של {user.name}</h2>
-        <p className="text-slate-600 text-sm mb-5 leading-relaxed">
-          סורק {user.target_cities?.length || 0} ערים · שולח התראות ל-{user.email} · סריקה אוטומטית כל שעה
-        </p>
-        <div className="flex flex-wrap gap-4">
-          <div className="px-5 py-3 rounded-xl bg-white border border-slate-200 shadow-sm text-sm font-medium">
-            <span className="font-semibold text-slate-800">{user.target_cities?.length || 0}</span>
-            <span className="text-slate-600 mr-1">ערים</span>
+          <h2 className="text-base sm:text-xl font-bold text-slate-800 mb-1">הסוכן של {user.name}</h2>
+          <p className="text-slate-600 text-xs sm:text-sm mb-4 leading-relaxed">
+            סורק {user.target_cities?.length || 0} ערים · שולח התראות ל‑{user.email}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <span className="px-3 py-2 rounded-xl bg-white border border-slate-200 shadow-sm text-xs font-medium">
+              <span className="font-semibold text-slate-800">{user.target_cities?.length || 0}</span>
+              <span className="text-slate-600 mr-1">ערים</span>
+            </span>
+            <span className="px-3 py-2 rounded-xl bg-white border border-slate-200 shadow-sm text-xs font-medium">
+              <span className="font-semibold text-slate-800">{maxRepay.toLocaleString()}₪</span>
+              <span className="text-slate-600 mr-1">החזר מקסימלי</span>
+            </span>
+            <span className="px-3 py-2 rounded-xl bg-white border border-slate-200 shadow-sm text-xs font-medium">
+              <span className="font-semibold text-slate-800">{user.equity?.toLocaleString()}₪</span>
+              <span className="text-slate-600 mr-1">הון עצמי</span>
+            </span>
+            <span className="px-3 py-2 rounded-xl bg-white border border-slate-200 shadow-sm text-xs font-medium text-slate-700">
+              {searchLabel}
+            </span>
           </div>
-          <div className="px-5 py-3 rounded-xl bg-white border border-slate-200 shadow-sm text-sm font-medium">
-            <span className="font-semibold text-slate-800">{maxRepay.toLocaleString()}₪</span>
-            <span className="text-slate-600 mr-1">החזר מקסימלי</span>
-          </div>
-          <div className="px-5 py-3 rounded-xl bg-white border border-slate-200 shadow-sm text-sm font-medium">
-            <span className="font-semibold text-slate-800">{user.equity?.toLocaleString()}₪</span>
-            <span className="text-slate-600 mr-1">הון עצמי</span>
-          </div>
-          <div className="px-5 py-3 rounded-xl bg-white border border-slate-200 shadow-sm text-sm font-medium">
-            <span className="font-semibold text-slate-800">{searchLabel}</span>
-          </div>
-        </div>
         </div>
       </div>
-      <div className="mb-6 flex flex-wrap gap-3 items-center">
+
+      {/* Action buttons */}
+      <div className="flex flex-wrap gap-3">
         <button
           type="button"
           onClick={handleRunScan}
           disabled={scanning}
-          className="px-5 py-3 rounded-xl font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-colors"
+          className="flex-1 sm:flex-none px-4 sm:px-5 py-3 rounded-xl font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-colors text-sm"
         >
           {scanning ? 'סורק...' : 'שלח את הסוכן לסרוק'}
         </button>
@@ -136,29 +145,30 @@ export default function TabDeals({ user }: { user: User }) {
           type="button"
           onClick={handleWeeklyReport}
           disabled={weeklyReportLoading}
-          className="px-5 py-3 rounded-xl font-semibold text-slate-700 bg-white border-2 border-teal-500 text-teal-700 hover:bg-teal-50 disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-colors"
+          className="flex-1 sm:flex-none px-4 sm:px-5 py-3 rounded-xl font-semibold border-2 border-teal-500 text-teal-700 hover:bg-teal-50 disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-colors text-sm"
         >
-          {weeklyReportLoading ? 'מפיק דוח...' : 'הפק דוח שבועי עכשיו'}
+          {weeklyReportLoading ? 'מפיק דוח...' : 'דוח שבועי'}
         </button>
       </div>
-      {weeklyReportToast && <p className="text-teal-600 font-medium mb-4">{weeklyReportToast}</p>}
-      <p className="text-xs text-slate-500 mb-4">דוח שבועי נשלח אוטומטית גם כל חמישי ב־21:00 למייל שלך.</p>
 
-      {/* תהליך הסריקה — מוצג בזמן סריקה ואחריה */}
+      {weeklyReportToast && <p className="text-teal-600 font-medium text-sm">{weeklyReportToast}</p>}
+      <p className="text-xs text-slate-500">דוח שבועי נשלח אוטומטית גם כל חמישי ב‑21:00 למייל שלך.</p>
+
+      {/* Scan progress / summary */}
       {(scanning || scanLog.length > 0) && (
-        <div className="bg-white rounded-2xl border-2 border-teal-100 shadow-sm p-6 mb-6">
-          <h3 className="text-base font-semibold text-slate-800 mb-4">
+        <div className="bg-white rounded-2xl border-2 border-teal-100 shadow-sm p-4 sm:p-6">
+          <h3 className="text-sm sm:text-base font-semibold text-slate-800 mb-3">
             {scanning ? 'הסוכן עובד עכשיו' : 'סיכום הסריקה'}
           </h3>
           {scanning ? (
-            <ul className="text-slate-600 text-sm space-y-1.5 list-none">
+            <ul className="text-slate-600 text-sm space-y-1 list-none">
               <li>• סורק אתרים (Yad2, Madlan וכו')</li>
               <li>• בודק התאמה להעדפות</li>
               <li>• מנתח עם AI ושומר התאמות</li>
             </ul>
           ) : scanSummary ? (
             <>
-              <ul className="text-slate-600 text-sm space-y-1.5 mb-4 list-none">
+              <ul className="text-slate-600 text-sm space-y-1 mb-3 list-none">
                 <li>• נסרקו {scanSummary.total_found} דירות</li>
                 <li>• נשמרו {scanSummary.total_matches} התאמות חדשות</li>
               </ul>
@@ -167,10 +177,10 @@ export default function TabDeals({ user }: { user: User }) {
                 onClick={() => setShowLogDetail(!showLogDetail)}
                 className="text-sm font-medium text-teal-600 hover:text-teal-700 focus:outline-none"
               >
-                {showLogDetail ? 'הסתר פירוט' : 'הצג פירוט הלוג'}
+                {showLogDetail ? 'הסתר פירוט' : 'הצג פירוט לוג'}
               </button>
               {showLogDetail && (
-                <div className="mt-3 p-4 rounded-xl bg-slate-50 border border-slate-200 max-h-56 overflow-auto font-mono text-xs text-slate-600">
+                <div className="mt-3 p-4 rounded-xl bg-slate-50 border border-slate-200 max-h-48 overflow-auto font-mono text-xs text-slate-600">
                   {scanLog.map((line, idx) => (
                     <div key={idx} className={line.level === 'error' ? 'text-red-600' : ''}>
                       {line.time && <span className="text-slate-400 mr-2">{line.time}</span>}
@@ -181,24 +191,46 @@ export default function TabDeals({ user }: { user: User }) {
               )}
             </>
           ) : (
-            <div className="text-red-600 text-sm">
-              {scanLog.map((l) => l.message).join(' ')}
-            </div>
+            <p className="text-red-600 text-sm">{scanLog.map((l) => l.message).join(' ')}</p>
           )}
         </div>
       )}
-      {toast && <p className="text-teal-600 font-medium mb-4">{toast}</p>}
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-4 pb-4 border-b border-slate-200">
-        <h3 className="text-lg font-semibold text-slate-800">דירות שנשמרו עבורך</h3>
-        <span className="px-4 py-2 rounded-xl bg-teal-600 text-white text-sm font-semibold">
-          {filteredByCity.length} דירות
+
+      {toast && <p className="text-teal-600 font-medium text-sm">{toast}</p>}
+
+      {/* View toggle: Latest Scan / All Properties */}
+      <div className="flex items-center gap-3 pb-4 border-b border-slate-200">
+        <div className="inline-flex rounded-xl bg-slate-100 p-1 gap-1">
+          <button
+            type="button"
+            onClick={() => setViewMode('latest')}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+              viewMode === 'latest' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'
+            }`}
+          >
+            סריקה אחרונה
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('all')}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+              viewMode === 'all' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'
+            }`}
+          >
+            כל הדירות שנמצאו
+          </button>
+        </div>
+        <span className="px-3 py-1.5 rounded-xl bg-teal-600 text-white text-xs font-semibold">
+          {filteredByCity.length}
         </span>
       </div>
+
+      {/* Filters — shown only when there are properties */}
       {properties.length > 0 && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 mb-6">
-          <div className="mb-4">
+        <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+          <div>
             <span className="block text-xs font-semibold text-slate-500 mb-2">סוג עסקה</span>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 overflow-x-auto pb-1">
               {DEAL_OPTS.map((o) => (
                 <button
                   key={o.value || 'all'}
@@ -213,7 +245,7 @@ export default function TabDeals({ user }: { user: User }) {
           </div>
           <div>
             <span className="block text-xs font-semibold text-slate-500 mb-2">עיר</span>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 overflow-x-auto pb-1">
               {cities.map((c) => (
                 <button
                   key={c}
@@ -228,13 +260,20 @@ export default function TabDeals({ user }: { user: User }) {
           </div>
         </div>
       )}
-      <p className="text-sm text-slate-500 mb-4">מציג {filteredByCity.length} דירות</p>
+
+      {/* Property list */}
       {loading ? (
-        <p className="text-slate-500">טוען...</p>
+        <p className="text-slate-500 text-sm py-6 text-center">טוען...</p>
       ) : filteredByCity.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
-          <h3 className="text-lg font-semibold text-slate-800 mb-2">הסוכן ממתין לפקודה</h3>
-          <p className="text-slate-600">לחץ על &quot;שלח את הסוכן לסרוק&quot; כדי שיחפש עבורך דירות</p>
+        <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center">
+          <h3 className="text-base font-semibold text-slate-800 mb-2">
+            {viewMode === 'latest' ? 'לא נמצאו דירות בסריקה האחרונה' : 'הסוכן ממתין לפקודה'}
+          </h3>
+          <p className="text-slate-500 text-sm">
+            {viewMode === 'latest'
+              ? 'לחץ על "שלח את הסוכן לסרוק" כדי להפעיל סריקה חדשה'
+              : 'לחץ על "שלח את הסוכן לסרוק" כדי שיחפש עבורך דירות'}
+          </p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -246,6 +285,6 @@ export default function TabDeals({ user }: { user: User }) {
           ))}
         </div>
       )}
-    </>
+    </div>
   )
 }
