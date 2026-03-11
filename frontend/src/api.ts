@@ -175,6 +175,16 @@ export interface ScanStartResult {
   status: 'started' | 'already_running';
 }
 
+export interface ScanRejections {
+  high_mortgage?: number;
+  over_budget?: number;
+  wrong_rooms?: number;
+  suspicious?: number;
+  irrelevant?: number;
+  low_score?: number;
+  other?: number;
+}
+
 export interface ScanStatus {
   running: boolean;
   finished: boolean;
@@ -182,6 +192,7 @@ export interface ScanStatus {
   total_found: number;
   total_matches: number;
   log: { time: string; level: string; message: string }[];
+  rejections: ScanRejections;
 }
 
 /** Fire-and-forget: returns immediately while the scan runs in the background. */

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import type { User, Property, ScanStatus } from '../api'
+import type { User, Property, ScanStatus, ScanRejections } from '../api'
 import { getProperties, startScan, getScanStatus, requestWeeklyReport } from '../api'
 import PropertyCard from './PropertyCard'
 import { AgentIcon } from './illustrations'
@@ -22,6 +22,62 @@ const LOG_LEVEL_CLASS: Record<string, string> = {
   warn: 'text-yellow-400',
   info: 'text-slate-300',
 }
+
+// ---------------------------------------------------------------------------
+// Rejection breakdown panel
+// ---------------------------------------------------------------------------
+
+function RejectionBreakdown({
+  total,
+  rejections,
+}: {
+  total: number
+  rejections: ScanRejections
+}) {
+  const rows: { label: string; count: number; color: string }[] = [
+    {
+      label: 'דירות נפסלו עקב החזר חודשי גבוה מהגדרתך',
+      count: (rejections.high_mortgage ?? 0) + (rejections.over_budget ?? 0),
+      color: 'text-yellow-400',
+    },
+    {
+      label: 'דירות נפסלו עקב מודעות חשודות או לא אמינות',
+      count: rejections.suspicious ?? 0,
+      color: 'text-orange-400',
+    },
+    {
+      label: 'דירות נפסלו עקב חוסר רלוונטיות (שותפים, מחסנים וכדומה)',
+      count: (rejections.irrelevant ?? 0) + (rejections.low_score ?? 0),
+      color: 'text-slate-400',
+    },
+    {
+      label: 'דירות נפסלו עקב מספר חדרים או סיבות אחרות',
+      count: (rejections.wrong_rooms ?? 0) + (rejections.other ?? 0),
+      color: 'text-slate-500',
+    },
+  ].filter((r) => r.count > 0)
+
+  if (rows.length === 0) return null
+
+  return (
+    <div className="mx-4 mb-4 rounded-xl bg-slate-800/60 border border-slate-700 px-4 py-3 space-y-2">
+      <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
+        פירוט סינון
+      </p>
+      <div className="font-mono text-xs text-teal-300">
+        {total} דירות נמצאו בסריקה הטכנית
+      </div>
+      {rows.map((r) => (
+        <div key={r.label} className={`font-mono text-xs ${r.color} flex gap-2`}>
+          <span className="shrink-0">{r.count}</span>
+          <span>{r.label}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 
 export default function TabDeals({ user }: { user: User }) {
   const [viewMode, setViewMode] = useState<ViewMode>('latest')
@@ -270,6 +326,14 @@ export default function TabDeals({ user }: { user: User }) {
               </p>
             )}
           </div>
+
+          {/* Rejection breakdown — shown only after scan finishes */}
+          {scanStatus?.finished && !scanning && (
+            <RejectionBreakdown
+              total={scanStatus.total_found}
+              rejections={scanStatus.rejections ?? {}}
+            />
+          )}
 
           {/* Scrollable log — toggled by "הצג לוג מלא" */}
           {showLog && scanStatus && scanStatus.log.length > 0 && (

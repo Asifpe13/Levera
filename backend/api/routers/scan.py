@@ -60,10 +60,32 @@ def _append_log(email: str, msg: str, level: str = "info") -> None:
 # Background scan task
 # ---------------------------------------------------------------------------
 
+def _classify_fit_rejection(reason: str) -> str:
+    """Map a check_property_fit rejection reason string to a rejection bucket."""
+    r = reason.lower()
+    if any(k in r for k in ("החזר חודשי", "הון עצמי", "משכנתא", "הכנסה", "בנקים")):
+        return "high_mortgage"
+    if any(k in r for k in ("מחיר", "תקציב", "שכר דירה")):
+        return "over_budget"
+    if any(k in r for k in ("חדרים", "חדר")):
+        return "wrong_rooms"
+    return "other"
+
+
+def _classify_ai_rejection(summary: str) -> str:
+    """Classify a low-score AI summary into suspicious vs irrelevant."""
+    s = summary.lower()
+    if any(k in s for k in ("שותפ", "מחסן", "חדר", "חלק מדירה", "לא דירה", "לא מתאים", "סטודנט")):
+        return "irrelevant"
+    if any(k in s for k in ("חשוד", "לא אמין", "מפוקפק", "הונאה", "שגוי", "מחיר חריג", "מניפולציה")):
+        return "suspicious"
+    return "low_score"
+
+
 def _run_scan_bg(email: str, db: DatabaseManager) -> None:
     """Full scan logic — runs after the HTTP response is already returned."""
     print(f"DEBUG: Background scan task actually started for {email}", flush=True)
-    from config import build_listing_url
+    from config import MIN_AI_SCORE_FOR_ALERT, build_listing_url
     from engine import ScanEngine, _enrich_property_insights
     from logic import check_property_fit
     from scrapers.homeless_scraper import HomelessScraper
@@ -73,10 +95,26 @@ def _run_scan_bg(email: str, db: DatabaseManager) -> None:
 
     total_found = 0
     total_matches = 0
+    # Rejection counters — updated throughout the scan
+    rejections: dict[str, int] = {
+        "high_mortgage": 0,   # failed mortgage / equity / income check
+        "over_budget":   0,   # price exceeds user budget
+        "wrong_rooms":   0,   # room count outside user range
+        "suspicious":    0,   # AI flagged as unreliable / suspicious ad
+        "irrelevant":    0,   # AI flagged as shared flat, storage, etc.
+        "low_score":     0,   # AI gave low score for other reasons
+        "other":         0,   # any other filter reason
+    }
 
     def log(msg: str, level: str = "info") -> None:
         _append_log(email, msg, level)
-        _set_status(email, msg, running=True, total_found=total_found, total_matches=total_matches)
+        with _scan_lock:
+            state = _scan_states.setdefault(email, {})
+            state["running"] = True
+            state["message"] = msg
+            state["total_found"] = total_found
+            state["total_matches"] = total_matches
+            state["rejections"] = dict(rejections)
 
     try:
         user = db.get_user_by_email(email)
@@ -133,7 +171,6 @@ def _run_scan_bg(email: str, db: DatabaseManager) -> None:
             for scraper_name, scraper in scrapers:
                 log(f"  → סורק {scraper_name}...")
                 try:
-                    # Per-city status so mobile users see live progress
                     for city in cities:
                         log(f"  🔍 סורק את {city} ב‑{scraper_name}...")
                     results = scraper.search_all_cities(
@@ -151,14 +188,27 @@ def _run_scan_bg(email: str, db: DatabaseManager) -> None:
                                 prop_data.get("source", ""), prop_data.get("source_id", "")
                             ):
                                 continue
-                            fits, _ = check_property_fit(prop_data, prefs)
+
+                            fits, reason = check_property_fit(prop_data, prefs)
                             if not fits:
+                                bucket = _classify_fit_rejection(str(reason))
+                                rejections[bucket] = rejections.get(bucket, 0) + 1
                                 continue
+
                             log("  🧠 מנתח עם AI...")
                             analysis = engine.ai.analyze_property(prop_data, prefs)
+                            ai_score = analysis.get("score", 0)
+                            ai_summary = analysis.get("summary", "")
+
+                            # Low-score AI rejection — classify and skip saving
+                            if ai_score < MIN_AI_SCORE_FOR_ALERT:
+                                bucket = _classify_ai_rejection(ai_summary)
+                                rejections[bucket] = rejections.get(bucket, 0) + 1
+                                continue
+
                             prop_data["matched_user_email"] = email
-                            prop_data["ai_score"] = analysis.get("score", 0)
-                            prop_data["ai_summary"] = analysis.get("summary", "")
+                            prop_data["ai_score"] = ai_score
+                            prop_data["ai_summary"] = ai_summary
                             prop_data["monthly_repayment"] = analysis.get("monthly_repayment_estimate")
                             city_avg = db.get_avg_price_per_room_by_city(email)
                             _enrich_property_insights(prop_data, city_avg, engine.ai)
@@ -175,7 +225,7 @@ def _run_scan_bg(email: str, db: DatabaseManager) -> None:
                                     f"  🏠 נשמרה: {prop_data.get('city', '?')} | "
                                     f"{prop_data.get('rooms', '?')} חד׳ | "
                                     f"{prop_data.get('price', 0):,.0f}₪ | "
-                                    f"ציון {analysis.get('score', 0)}",
+                                    f"ציון {ai_score}",
                                     "success",
                                 )
                             except Exception:
@@ -185,10 +235,7 @@ def _run_scan_bg(email: str, db: DatabaseManager) -> None:
                 except Exception as e:
                     log(f"  ✗ {scraper_name}: שגיאה — {str(e)[:60]}", "error")
 
-        summary = (
-            f"📊 בסריקה זו: נסרקו {total_found} דירות, נשמרו {total_matches} התאמות חדשות"
-        )
-        log(summary)
+        log(f"📊 בסריקה זו: נסרקו {total_found} דירות, נשמרו {total_matches} התאמות חדשות")
         _append_log(email, "💤 הסוכן חוזר לישון.", "info")
 
     except Exception as e:
@@ -200,6 +247,7 @@ def _run_scan_bg(email: str, db: DatabaseManager) -> None:
             state["finished"] = True
             state["total_found"] = total_found
             state["total_matches"] = total_matches
+            state["rejections"] = dict(rejections)
             state["message"] = f"הסריקה הושלמה — נמצאו {total_found} דירות, {total_matches} התאמות"
 
 
@@ -247,6 +295,7 @@ def get_scan_status(email: str = Depends(get_current_user_email)):
                 "total_found": 0,
                 "total_matches": 0,
                 "log": [],
+                "rejections": {},
             },
         )
         return dict(state)
