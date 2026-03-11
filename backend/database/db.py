@@ -86,6 +86,9 @@ class DatabaseManager:
         })
 
     def get_email_by_remember_token(self, token: str) -> Optional[str]:
+        # Reject non-string or suspiciously long tokens before touching the DB
+        if not isinstance(token, str) or len(token) > 200:
+            return None
         doc = self.login_tokens.find_one({"token": token})
         if not doc:
             return None
@@ -118,8 +121,19 @@ class DatabaseManager:
     def get_active_users(self) -> list[dict]:
         return list(self.users.find({"is_active": True}))
 
+    def user_owns_email(self, requesting_email: str, target_email: str) -> bool:
+        """Return True only when both emails are plain strings and are equal.
+        Used to enforce that users can only access their own data.
+        """
+        if not isinstance(requesting_email, str) or not isinstance(target_email, str):
+            return False
+        return requesting_email.strip().lower() == target_email.strip().lower()
+
     def get_user_by_email(self, email: str) -> Optional[dict]:
-        return self.users.find_one({"email": email})
+        # Guard against NoSQL injection: only accept plain strings
+        if not isinstance(email, str) or not email:
+            return None
+        return self.users.find_one({"email": email.strip().lower()})
 
     # ─── Properties ───────────────────────────────────────────
 
@@ -171,6 +185,8 @@ class DatabaseManager:
         return result
 
     def get_unsent_properties(self, user_email: str) -> list[dict]:
+        if not isinstance(user_email, str) or not user_email:
+            return []
         return list(self.properties.find({
             "matched_user_email": user_email,
             "email_sent": False,
@@ -211,14 +227,18 @@ class DatabaseManager:
             )
 
     def get_all_properties_for_user(self, user_email: str, limit: int = 50) -> list[dict]:
+        if not isinstance(user_email, str) or not user_email:
+            return []
         return list(
             self.properties.find({"matched_user_email": user_email})
             .sort("found_at", DESCENDING)
-            .limit(limit)
+            .limit(min(limit, 200))   # hard cap — callers cannot request unlimited docs
         )
 
     def get_latest_scan_properties(self, user_email: str, limit: int = 50) -> list[dict]:
         """Return properties from the most recent scan session (grouped by found_at proximity)."""
+        if not isinstance(user_email, str) or not user_email:
+            return []
         latest_search = self.searches.find_one(
             {"user_email": user_email},
             sort=[("executed_at", DESCENDING)],

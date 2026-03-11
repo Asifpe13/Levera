@@ -35,7 +35,7 @@ plotly>=5.18.0
 loguru>=0.7.2
 
 # Security
-passlib[bcrypt]>=1.7.4
+bcrypt>=4.0.0
 
 # RTL text rendering (Hebrew PDF support)
 # Pin to the last pure-Python release — versions >=0.5 require Rust/Maturin

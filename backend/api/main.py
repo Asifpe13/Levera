@@ -16,8 +16,9 @@ from dotenv import load_dotenv
 load_dotenv(ROOT.parent / ".env")  # repo root .env
 load_dotenv(ROOT / ".env")
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from api.routers import auth, user, properties, scan, market, config as config_router
 
@@ -47,6 +48,23 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.exception_handler(Exception)
+async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """
+    Catch-all for unhandled exceptions.
+    Returning a JSONResponse here (rather than letting Starlette's ServerErrorMiddleware
+    take over) ensures the CORSMiddleware still wraps the response and the
+    Access-Control-Allow-Origin header reaches the browser.
+    """
+    import traceback
+    from loguru import logger
+    logger.error(f"Unhandled error on {request.method} {request.url}: {exc}\n{traceback.format_exc()}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "שגיאת שרת פנימית — נסה שוב מאוחר יותר"},
+    )
+
 
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(user.router, prefix="/user", tags=["user"])

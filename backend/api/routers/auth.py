@@ -1,15 +1,24 @@
 """
 Auth: register and login.
 
-Passwords are hashed with bcrypt via passlib.
+Passwords are hashed directly with the bcrypt library (no passlib wrapper).
 Legacy accounts (no password_hash) can still log in without a password
 so that existing users aren't locked out after the upgrade.
+
+Brute-force protection:
+- Failed login attempts are tracked per email in an in-memory sliding-window counter.
+- After _MAX_ATTEMPTS failures within _WINDOW_SECONDS the endpoint returns 429.
+- A short sleep is injected on every failed attempt to slow down automated guessing
+  even before the hard limit is reached.
 """
+import threading
+import time
 import uuid
+from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 
+import bcrypt
 from fastapi import APIRouter, Depends, HTTPException, status
-from passlib.context import CryptContext
 
 from api.deps import get_db
 from api.schemas import LoginRequest, LoginResponse, RegisterRequest, user_dict_to_response
@@ -17,15 +26,55 @@ from database.db import DatabaseManager
 
 router = APIRouter()
 
-_pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
+# ---------------------------------------------------------------------------
+# Password helpers
+# ---------------------------------------------------------------------------
 
 def _hash(password: str) -> str:
-    return _pwd.hash(password)
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def _verify(plain: str, hashed: str) -> bool:
-    return _pwd.verify(plain, hashed)
+    try:
+        return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+    except Exception:
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Brute-force rate limiter  (in-memory, per email address)
+# ---------------------------------------------------------------------------
+
+_MAX_ATTEMPTS = 5        # maximum failures allowed inside the window
+_WINDOW_SECONDS = 300    # rolling 5-minute window
+_FAILURE_SLEEP = 1.0     # seconds to sleep after every failure (slows down bots)
+
+_failed: dict[str, list[float]] = defaultdict(list)
+_failed_lock = threading.Lock()
+
+
+def _check_rate_limit(key: str) -> None:
+    """Raise 429 if the key (email) has exceeded the failure threshold."""
+    now = time.monotonic()
+    with _failed_lock:
+        recent = [t for t in _failed[key] if now - t < _WINDOW_SECONDS]
+        _failed[key] = recent
+        if len(recent) >= _MAX_ATTEMPTS:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="יותר מדי ניסיונות כושלים — נסה שוב עוד מספר דקות",
+                headers={"Retry-After": str(_WINDOW_SECONDS)},
+            )
+
+
+def _record_failure(key: str) -> None:
+    with _failed_lock:
+        _failed[key].append(time.monotonic())
+
+
+def _clear_failures(key: str) -> None:
+    with _failed_lock:
+        _failed.pop(key, None)
 
 
 # ---------------------------------------------------------------------------
@@ -38,8 +87,14 @@ def login(body: LoginRequest, db: DatabaseManager = Depends(get_db)):
     if not email:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="נדרשת כתובת אימייל")
 
+    # Check rate limit before any DB call so we don't leak user-existence info
+    _check_rate_limit(email)
+
     user = db.get_user_by_email(email)
     if not user:
+        # Uniform delay: prevents timing-based user enumeration
+        time.sleep(_FAILURE_SLEEP)
+        _record_failure(email)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="לא נמצא חשבון עם אימייל זה — צור חשבון חדש",
@@ -47,13 +102,16 @@ def login(body: LoginRequest, db: DatabaseManager = Depends(get_db)):
 
     stored_hash = user.get("password_hash")
     if stored_hash:
-        # Account has a password — verify it
         if not body.password or not _verify(body.password, stored_hash):
+            time.sleep(_FAILURE_SLEEP)
+            _record_failure(email)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="סיסמה שגויה",
             )
     # Legacy accounts (no password_hash) bypass password check for backward compat
+
+    _clear_failures(email)
 
     token = str(uuid.uuid4())
     expires_at = (
@@ -65,9 +123,11 @@ def login(body: LoginRequest, db: DatabaseManager = Depends(get_db)):
 
 @router.post("/register", response_model=LoginResponse)
 def register(body: RegisterRequest, db: DatabaseManager = Depends(get_db)):
-    email = (body.email or "").strip().lower()
-    name = (body.name or "").strip()
+    # Pydantic has already validated field lengths/types at this point.
+    email = body.email  # already normalised by schema validator
+    name = body.name    # already stripped
 
+    # Belt-and-suspenders checks (Pydantic catches most, but belt keeps code clear)
     if not email:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="נדרשת כתובת אימייל")
     if not name:
