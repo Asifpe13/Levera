@@ -62,6 +62,7 @@ def _append_log(email: str, msg: str, level: str = "info") -> None:
 
 def _run_scan_bg(email: str, db: DatabaseManager) -> None:
     """Full scan logic — runs after the HTTP response is already returned."""
+    print(f"DEBUG: Background scan task actually started for {email}", flush=True)
     from config import build_listing_url
     from engine import ScanEngine, _enrich_property_insights
     from logic import check_property_fit
@@ -212,14 +213,24 @@ def run_scan(
     email: str = Depends(get_current_user_email),
     db: DatabaseManager = Depends(get_db),
 ):
-    """Start a background scan and return immediately so mobile clients don't time out."""
+    """Return {"status":"started"} immediately; scan runs in a background task."""
+    # ── Guard: don't double-start ──
     with _scan_lock:
-        current = _scan_states.get(email, {})
-        if current.get("running"):
+        if _scan_states.get(email, {}).get("running"):
             return {"status": "already_running"}
+        # Mark as started *before* queuing so /scan/status shows activity instantly
+        _scan_states[email] = {
+            "running": True,
+            "finished": False,
+            "message": "מתחיל סריקה...",
+            "total_found": 0,
+            "total_matches": 0,
+            "log": [],
+        }
 
-    _set_status(email, "מתחיל סריקה...", running=True, finished=False, log=[])
+    # ── Queue background work and return immediately ──
     background_tasks.add_task(_run_scan_bg, email, db)
+    print(f"DEBUG: /scan POST returning 'started' for {email}", flush=True)
     return {"status": "started"}
 
 

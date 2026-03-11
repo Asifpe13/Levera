@@ -189,9 +189,24 @@ export function startScan(): Promise<ScanStartResult> {
   return request<ScanStartResult>('/scan/', { method: 'POST' });
 }
 
-/** Poll this every 2 s to get the current Hebrew progress message. */
+/** Poll this every 2 s to get the current Hebrew progress message.
+ *  Uses a short 8 s timeout so stale polls don't block the UI. */
 export function getScanStatus(): Promise<ScanStatus> {
-  return request<ScanStatus>('/scan/status');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8_000);
+  const token = getToken();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  return fetch(buildUrl('/scan/status'), { headers, signal: controller.signal })
+    .then((r) => {
+      clearTimeout(timer);
+      if (!r.ok) throw new Error(r.statusText);
+      return r.json() as Promise<ScanStatus>;
+    })
+    .catch((err) => {
+      clearTimeout(timer);
+      throw err;
+    });
 }
 
 export interface WeeklyReportResult {

@@ -95,22 +95,49 @@ export default function TabDeals({ user }: { user: User }) {
     setShowLog(false)
     setToast('')
 
+    // Attempt to start the scan, but DO NOT stop if it times out.
+    // On Render free-tier the cold-start can exceed 60 s; the backend
+    // likely received the request and queued the background task even
+    // when the client never sees the response.
+    let hardError = false
     try {
       await startScan()
     } catch (err) {
-      setScanStatus({
-        running: false,
-        finished: true,
-        message: err instanceof Error ? err.message : 'שגיאה בהתחלת סריקה',
-        total_found: 0,
-        total_matches: 0,
-        log: [{ time: '', level: 'error', message: err instanceof Error ? err.message : 'שגיאה' }],
-      })
-      setScanning(false)
-      return
+      const msg = err instanceof Error ? err.message : ''
+      const isTimeout =
+        msg.includes('יותר מדי זמן') ||
+        msg.toLowerCase().includes('timeout') ||
+        msg.toLowerCase().includes('abort')
+
+      if (isTimeout) {
+        // Backend probably started — begin polling to confirm
+        setScanStatus((prev) => prev ?? {
+          running: true,
+          finished: false,
+          message: 'מחכה לתגובת השרת... (האתחול עשוי לקחת עד דקה)',
+          total_found: 0,
+          total_matches: 0,
+          log: [],
+        })
+      } else {
+        // Definitive failure (4xx / network down)
+        hardError = true
+        setScanStatus({
+          running: false,
+          finished: true,
+          message: msg || 'שגיאה בהתחלת סריקה',
+          total_found: 0,
+          total_matches: 0,
+          log: [{ time: '', level: 'error', message: msg || 'שגיאה' }],
+        })
+        setScanning(false)
+      }
     }
 
-    // Poll /scan/status every 2 seconds
+    if (hardError) return
+
+    // Start polling /scan/status every 2 seconds regardless of whether
+    // startScan() succeeded or timed out.
     pollRef.current = setInterval(async () => {
       try {
         const status = await getScanStatus()
@@ -125,7 +152,7 @@ export default function TabDeals({ user }: { user: User }) {
           setViewMode('latest')
         }
       } catch {
-        // Network hiccup — keep polling, don't abort
+        // Transient network hiccup — keep polling
       }
     }, 2000)
   }
