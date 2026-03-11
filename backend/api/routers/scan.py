@@ -6,9 +6,16 @@ POST /scan        → returns {"status": "started"} immediately;
 GET  /scan/status → returns the current Hebrew progress message for
                    the authenticated user (polled every 2 s by the UI).
 POST /scan/weekly-report → generate + send the weekly report now.
+
+Performance features:
+- Scrapers run in parallel threads (one per source site).
+- Scraper results are cached for 10 minutes to avoid redundant HTTP calls.
+- AI analysis is batched every 5 candidates so progress updates flow to the UI
+  before the entire AI phase finishes.
 """
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends
@@ -25,6 +32,51 @@ router = APIRouter()
 
 _scan_states: dict[str, dict[str, Any]] = {}
 _scan_lock = threading.Lock()
+
+# ---------------------------------------------------------------------------
+# Scraper result cache (10-minute TTL, keyed by site+deal+cities+rooms+price)
+# ---------------------------------------------------------------------------
+
+_CACHE_TTL = 600  # seconds
+_AI_BATCH_SIZE = 5
+
+_scraper_cache: dict[str, tuple[float, list[dict]]] = {}
+_cache_lock = threading.Lock()
+
+
+def _cached_search(scraper, cities: list[str], rooms_min: int,
+                   rooms_max: int, price_max: Any) -> list[dict]:
+    """Run scraper.search_all_cities, returning a cached copy when fresh."""
+    from loguru import logger
+    key = (
+        f"{scraper.SOURCE_NAME}:{scraper.deal_type}:"
+        f"{':'.join(sorted(cities))}:{rooms_min}:{rooms_max}:{price_max}"
+    )
+    now = time.monotonic()
+    with _cache_lock:
+        if key in _scraper_cache:
+            cached_at, cached_results = _scraper_cache[key]
+            if now - cached_at < _CACHE_TTL:
+                logger.debug(f"[cache] HIT {scraper.SOURCE_NAME}/{scraper.deal_type}")
+                return list(cached_results)
+
+    results = scraper.search_all_cities(
+        cities=cities,
+        rooms_min=rooms_min,
+        rooms_max=rooms_max,
+        price_max=price_max,
+        max_pages=1,
+    )
+
+    with _cache_lock:
+        # Simple eviction: drop entries older than TTL whenever cache grows large
+        if len(_scraper_cache) > 500:
+            stale = [k for k, (t, _) in _scraper_cache.items() if now - t >= _CACHE_TTL]
+            for k in stale:
+                del _scraper_cache[k]
+        _scraper_cache[key] = (now, list(results))
+
+    return results
 
 
 def _set_status(
@@ -83,7 +135,14 @@ def _classify_ai_rejection(summary: str) -> str:
 
 
 def _run_scan_bg(email: str, db: DatabaseManager) -> None:
-    """Full scan logic — runs after the HTTP response is already returned."""
+    """Full scan logic — runs after the HTTP response is already returned.
+
+    Architecture:
+      Phase 1  Scraping    — all 4 source sites run in parallel threads.
+      Phase 2  Filtering   — deterministic check_property_fit per listing.
+      Phase 3  AI batches  — AI analysis in groups of _AI_BATCH_SIZE so the
+                             UI receives incremental progress messages.
+    """
     print(f"DEBUG: Background scan task actually started for {email}", flush=True)
     from config import MIN_AI_SCORE_FOR_ALERT, build_listing_url
     from engine import ScanEngine, _enrich_property_insights
@@ -95,15 +154,14 @@ def _run_scan_bg(email: str, db: DatabaseManager) -> None:
 
     total_found = 0
     total_matches = 0
-    # Rejection counters — updated throughout the scan
     rejections: dict[str, int] = {
-        "high_mortgage": 0,   # failed mortgage / equity / income check
-        "over_budget":   0,   # price exceeds user budget
-        "wrong_rooms":   0,   # room count outside user range
-        "suspicious":    0,   # AI flagged as unreliable / suspicious ad
-        "irrelevant":    0,   # AI flagged as shared flat, storage, etc.
-        "low_score":     0,   # AI gave low score for other reasons
-        "other":         0,   # any other filter reason
+        "high_mortgage": 0,
+        "over_budget":   0,
+        "wrong_rooms":   0,
+        "suspicious":    0,
+        "irrelevant":    0,
+        "low_score":     0,
+        "other":         0,
     }
 
     def log(msg: str, level: str = "info") -> None:
@@ -139,19 +197,21 @@ def _run_scan_bg(email: str, db: DatabaseManager) -> None:
         )
 
         engine = ScanEngine(db=db)
+        # Compute city price averages once — reused for every property enrichment
+        city_avg = db.get_avg_price_per_room_by_city(email)
 
         for dt in deal_types:
             label = "מכירה" if dt == "sale" else "שכירות"
-            log(f"🔄 סורק {label}...")
+            log(f"🔄 סורק {label} במקביל בכל האתרים...")
 
-            scrapers = [
-                ("Yad2", Yad2ApiScraper(deal_type=dt)),
-                ("Madlan", MadlanScraper(deal_type=dt)),
-                ("Homeless", HomelessScraper(deal_type=dt)),
-                ("WinWin", WinWinScraper(deal_type=dt)),
-            ]
-            rooms_min = user.get("rent_room_range_min", 1) if dt == "rent" else user.get("room_range_min", 1)
-            rooms_max = user.get("rent_room_range_max", 8) if dt == "rent" else user.get("room_range_max", 8)
+            rooms_min = (
+                user.get("rent_room_range_min", 1) if dt == "rent"
+                else user.get("room_range_min", 1)
+            )
+            rooms_max = (
+                user.get("rent_room_range_max", 8) if dt == "rent"
+                else user.get("room_range_max", 8)
+            )
             price_max = user.get("max_rent") if dt == "rent" else user.get("max_price")
 
             prefs = {
@@ -168,72 +228,100 @@ def _run_scan_bg(email: str, db: DatabaseManager) -> None:
                 "extra_preferences": user.get("extra_preferences"),
             }
 
-            for scraper_name, scraper in scrapers:
-                log(f"  → סורק {scraper_name}...")
+            scrapers_list = [
+                ("Yad2",    Yad2ApiScraper(deal_type=dt)),
+                ("Madlan",  MadlanScraper(deal_type=dt)),
+                ("Homeless", HomelessScraper(deal_type=dt)),
+                ("WinWin",  WinWinScraper(deal_type=dt)),
+            ]
+
+            # ── Phase 1: parallel scraping ────────────────────────────────
+            def _run_one_scraper(item: tuple) -> tuple[str, list[dict], str | None]:
+                name, scraper = item
                 try:
-                    for city in cities:
-                        log(f"  🔍 סורק את {city} ב‑{scraper_name}...")
-                    results = scraper.search_all_cities(
-                        cities=cities,
-                        rooms_min=rooms_min,
-                        rooms_max=rooms_max,
-                        price_max=price_max,
-                        max_pages=1,
-                    )
-                    if results:
-                        log(f"  ✓ {scraper_name}: נמצאו {len(results)} דירות", "success")
+                    results = _cached_search(scraper, cities, rooms_min, rooms_max, price_max)
+                    return name, results, None
+                except Exception as exc:
+                    return name, [], str(exc)
+
+            all_raw: list[dict] = []
+            with ThreadPoolExecutor(max_workers=4, thread_name_prefix="scraper") as pool:
+                future_to_name = {
+                    pool.submit(_run_one_scraper, item): item[0]
+                    for item in scrapers_list
+                }
+                for future in as_completed(future_to_name):
+                    name, results, err = future.result()
+                    if err:
+                        log(f"  ✗ {name}: שגיאה — {err[:60]}", "error")
+                    elif results:
+                        log(f"  ✓ {name}: נמצאו {len(results)} דירות", "success")
+                        all_raw.extend(results)
                         total_found += len(results)
-                        for prop_data in results:
-                            if db.property_exists(
-                                prop_data.get("source", ""), prop_data.get("source_id", "")
-                            ):
-                                continue
-
-                            fits, reason = check_property_fit(prop_data, prefs)
-                            if not fits:
-                                bucket = _classify_fit_rejection(str(reason))
-                                rejections[bucket] = rejections.get(bucket, 0) + 1
-                                continue
-
-                            log("  🧠 מנתח עם AI...")
-                            analysis = engine.ai.analyze_property(prop_data, prefs)
-                            ai_score = analysis.get("score", 0)
-                            ai_summary = analysis.get("summary", "")
-
-                            # Low-score AI rejection — classify and skip saving
-                            if ai_score < MIN_AI_SCORE_FOR_ALERT:
-                                bucket = _classify_ai_rejection(ai_summary)
-                                rejections[bucket] = rejections.get(bucket, 0) + 1
-                                continue
-
-                            prop_data["matched_user_email"] = email
-                            prop_data["ai_score"] = ai_score
-                            prop_data["ai_summary"] = ai_summary
-                            prop_data["monthly_repayment"] = analysis.get("monthly_repayment_estimate")
-                            city_avg = db.get_avg_price_per_room_by_city(email)
-                            _enrich_property_insights(prop_data, city_avg, engine.ai)
-                            if not (prop_data.get("listing_url") or "").strip():
-                                prop_data["listing_url"] = build_listing_url(
-                                    prop_data.get("source"),
-                                    prop_data.get("source_id"),
-                                    prop_data.get("deal_type"),
-                                )
-                            try:
-                                db.add_property(prop_data)
-                                total_matches += 1
-                                log(
-                                    f"  🏠 נשמרה: {prop_data.get('city', '?')} | "
-                                    f"{prop_data.get('rooms', '?')} חד׳ | "
-                                    f"{prop_data.get('price', 0):,.0f}₪ | "
-                                    f"ציון {ai_score}",
-                                    "success",
-                                )
-                            except Exception:
-                                pass
                     else:
-                        log(f"  — {scraper_name}: אין תוצאות", "warn")
-                except Exception as e:
-                    log(f"  ✗ {scraper_name}: שגיאה — {str(e)[:60]}", "error")
+                        log(f"  — {name}: אין תוצאות", "warn")
+
+            # ── Phase 2: deterministic filtering ─────────────────────────
+            candidates: list[dict] = []
+            for prop_data in all_raw:
+                if db.property_exists(
+                    prop_data.get("source", ""), prop_data.get("source_id", "")
+                ):
+                    continue
+                fits, reason = check_property_fit(prop_data, prefs)
+                if not fits:
+                    bucket = _classify_fit_rejection(str(reason))
+                    rejections[bucket] = rejections.get(bucket, 0) + 1
+                else:
+                    candidates.append(prop_data)
+
+            if candidates:
+                log(f"📋 {len(candidates)} מועמדים עוברים לניתוח AI (מתוך {total_found} שנסרקו)")
+            else:
+                log(f"📋 אין מועמדים לניתוח AI לאחר סינון (נסרקו {total_found} דירות)", "warn")
+
+            # ── Phase 3: AI analysis in batches ───────────────────────────
+            for batch_start in range(0, len(candidates), _AI_BATCH_SIZE):
+                batch = candidates[batch_start: batch_start + _AI_BATCH_SIZE]
+                batch_end = min(batch_start + _AI_BATCH_SIZE, len(candidates))
+                log(f"  🧠 AI: מנתח דירות {batch_start + 1}–{batch_end} מתוך {len(candidates)}...")
+
+                for prop_data in batch:
+                    analysis = engine.ai.analyze_property(prop_data, prefs)
+                    ai_score = analysis.get("score", 0)
+                    ai_summary = analysis.get("summary", "")
+
+                    if ai_score < MIN_AI_SCORE_FOR_ALERT:
+                        bucket = _classify_ai_rejection(ai_summary)
+                        rejections[bucket] = rejections.get(bucket, 0) + 1
+                        continue
+
+                    prop_data["matched_user_email"] = email
+                    prop_data["ai_score"] = ai_score
+                    prop_data["ai_summary"] = ai_summary
+                    prop_data["monthly_repayment"] = analysis.get("monthly_repayment_estimate")
+                    _enrich_property_insights(prop_data, city_avg, engine.ai)
+                    if not (prop_data.get("listing_url") or "").strip():
+                        prop_data["listing_url"] = build_listing_url(
+                            prop_data.get("source"),
+                            prop_data.get("source_id"),
+                            prop_data.get("deal_type"),
+                        )
+                    try:
+                        db.add_property(prop_data)
+                        total_matches += 1
+                        log(
+                            f"  🏠 נשמרה: {prop_data.get('city', '?')} | "
+                            f"{prop_data.get('rooms', '?')} חד׳ | "
+                            f"{prop_data.get('price', 0):,.0f}₪ | "
+                            f"ציון {ai_score}",
+                            "success",
+                        )
+                    except Exception:
+                        pass
+
+                # Push incremental progress to the UI after every batch
+                log(f"  ✅ אצווה הושלמה — {total_matches} התאמות עד כה")
 
         log(f"📊 בסריקה זו: נסרקו {total_found} דירות, נשמרו {total_matches} התאמות חדשות")
         _append_log(email, "💤 הסוכן חוזר לישון.", "info")

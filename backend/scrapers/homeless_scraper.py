@@ -54,20 +54,20 @@ class HomelessScraper(BaseScraper):
         if page > 1:
             params["page"] = page
 
-        for attempt in range(3):
+        for attempt in range(2):
             try:
                 # Human-like random delay; extra back-off on retries
                 time.sleep(random.uniform(3, 7) + attempt * 2)
 
-                resp = self.session.get(url, params=params, timeout=25)
+                resp = self.session.get(url, params=params, timeout=15)
 
                 if resp.status_code == 403:
                     logger.warning(
                         f"[homeless] Blocked (403) for {city} "
-                        f"(attempt {attempt + 1}/3) — clearing session, waiting 10s"
+                        f"(attempt {attempt + 1}/2) — clearing session, waiting 8s"
                     )
                     self._session = None   # discard cookies/session state
-                    time.sleep(10)         # mandatory cool-down before retry
+                    time.sleep(8)          # mandatory cool-down before retry
                     continue
 
                 if resp.status_code != 200:

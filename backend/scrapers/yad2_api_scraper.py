@@ -80,7 +80,7 @@ class Yad2ApiScraper(BaseScraper):
 
         url = f"https://www.yad2.co.il/realestate/{self.deal_slug}"
         try:
-            resp = self.session.get(url, params=params, timeout=28)
+            resp = self.session.get(url, params=params, timeout=15)
             if resp.status_code != 200:
                 logger.warning(f"[yad2] HTTP {resp.status_code} for {city}")
                 return []
@@ -111,7 +111,7 @@ class Yad2ApiScraper(BaseScraper):
         self._session = None  # reset session with a fresh UA
         try:
             time.sleep(random.uniform(4, 8))
-            resp = self.session.get(url, params=params, timeout=28)
+            resp = self.session.get(url, params=params, timeout=15)
             if resp.status_code != 200:
                 logger.warning(f"[yad2] Mobile API HTTP {resp.status_code} for {city}")
                 return []

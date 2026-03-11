@@ -14,8 +14,8 @@ from scrapers._http import browser_headers, random_ua
 from scrapers.base_scraper import BaseScraper
 
 DEAL_PATHS = {"sale": "ForSale", "rent": "ForRent"}
-_TIMEOUT = 30
-_MAX_ATTEMPTS = 3
+_TIMEOUT = 15
+_MAX_ATTEMPTS = 2
 
 
 class WinWinScraper(BaseScraper):
