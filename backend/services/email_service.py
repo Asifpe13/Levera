@@ -85,10 +85,17 @@ def _register_hebrew_font() -> str:
 
 
 def _bidi(text: str) -> str:
-    """Apply the Unicode bidi algorithm so Hebrew reads RTL inside a LTR PDF."""
+    """Apply the Unicode bidi algorithm so Hebrew reads RTL inside a LTR PDF.
+
+    Requires python-bidi==0.4.2 (pure Python).  Falls back to the original
+    text if the library is absent or raises, so the PDF always generates.
+    """
     try:
-        from bidi.algorithm import get_display  # type: ignore
+        from bidi.algorithm import get_display  # type: ignore[import]
         return get_display(text)
+    except ImportError:
+        logger.debug("python-bidi not installed — Hebrew PDF text will be LTR")
+        return text
     except Exception:
         return text
 

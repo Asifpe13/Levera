@@ -1,7 +1,6 @@
 # Web Framework & API
 fastapi>=0.109.0
 uvicorn[standard]>=0.27.0
-uvicorn[standard]>=0.27.0
 
 # Database
 pymongo>=4.6.0
@@ -39,7 +38,8 @@ loguru>=0.7.2
 passlib[bcrypt]>=1.7.4
 
 # RTL text rendering (Hebrew PDF support)
-python-bidi>=0.4.2
+# Pin to the last pure-Python release — versions >=0.5 require Rust/Maturin
+python-bidi==0.4.2
 
 # Testing
 pytest>=8.0.0
