@@ -168,7 +168,7 @@ export function getProperties(params?: {
   if (params?.city) q.city = params.city;
   if (params?.limit) q.limit = String(params.limit);
   if (params?.view) q.view = params.view;
-  return request<Property[]>('/properties/', { params: q }).then((r) => (Array.isArray(r) ? r : []));
+  return request<Property[]>('/properties', { params: q }).then((r) => (Array.isArray(r) ? r : []));
 }
 
 export interface ScanStartResult {
@@ -186,7 +186,7 @@ export interface ScanStatus {
 
 /** Fire-and-forget: returns immediately while the scan runs in the background. */
 export function startScan(): Promise<ScanStartResult> {
-  return request<ScanStartResult>('/scan/', { method: 'POST' });
+  return request<ScanStartResult>('/scan', { method: 'POST' });
 }
 
 /** Poll this every 2 s to get the current Hebrew progress message.

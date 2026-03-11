@@ -25,6 +25,7 @@ app = FastAPI(
     title="Levera API",
     description="Backend for Levera dashboard — auth, properties, scan, market trends",
     version="1.0.0",
+    redirect_slashes=False,   # prevent 307 redirects on trailing-slash mismatches
 )
 
 # CORS: local dev + any Vercel deployment (*.vercel.app) + optional CORS_ORIGINS
@@ -33,6 +34,7 @@ _cors_origins = [
     "http://127.0.0.1:5173",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://levera-pro.vercel.app",   # production frontend (exact origin)
 ]
 _extra = os.getenv("CORS_ORIGINS", "").strip()
 if _extra:
@@ -40,7 +42,7 @@ if _extra:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
-    allow_origin_regex=r"https://.*\.vercel\.app",  # all Vercel frontends
+    allow_origin_regex=r"https://.*\.vercel\.app",  # any Vercel preview/branch deploy
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

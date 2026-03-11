@@ -11,7 +11,7 @@ from config import build_listing_url
 router = APIRouter()
 
 
-@router.get("/")
+@router.get("")
 def list_properties(
     email: str = Depends(get_current_user_email),
     db: DatabaseManager = Depends(get_db),
