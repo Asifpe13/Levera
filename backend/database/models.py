@@ -11,6 +11,8 @@ from pydantic import BaseModel, Field
 class User(BaseModel):
     name: str
     email: str
+    # Stored as bcrypt hash — never returned in API responses
+    password_hash: Optional[str] = None
     target_cities: list[str] = []
     search_type: str = "both"  # "buy", "rent", "both"
     # פרופיל החלטה: קונה דירה ראשונה / משקיע / מקסום תזרים

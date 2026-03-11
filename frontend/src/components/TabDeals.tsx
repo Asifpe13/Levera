@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
-import type { User, Property } from '../api'
-import { getProperties, runScan, requestWeeklyReport } from '../api'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import type { User, Property, ScanStatus } from '../api'
+import { getProperties, startScan, getScanStatus, requestWeeklyReport } from '../api'
 import PropertyCard from './PropertyCard'
 import { AgentIcon } from './illustrations'
 
@@ -16,6 +16,13 @@ const pillBase = 'px-3 py-1.5 rounded-full text-sm font-medium transition-colors
 const pillActive = 'bg-teal-600 text-white'
 const pillInactive = 'bg-slate-100 text-slate-600 hover:bg-slate-200'
 
+const LOG_LEVEL_CLASS: Record<string, string> = {
+  success: 'text-teal-400',
+  error: 'text-red-400',
+  warn: 'text-yellow-400',
+  info: 'text-slate-300',
+}
+
 export default function TabDeals({ user }: { user: User }) {
   const [viewMode, setViewMode] = useState<ViewMode>('latest')
   const [properties, setProperties] = useState<Property[]>([])
@@ -23,10 +30,15 @@ export default function TabDeals({ user }: { user: User }) {
   const [dealFilter, setDealFilter] = useState('')
   const [cityFilter, setCityFilter] = useState('')
   const [cities, setCities] = useState<string[]>([])
+
+  // Scan state
   const [scanning, setScanning] = useState(false)
-  const [scanLog, setScanLog] = useState<{ time: string; level: string; message: string }[]>([])
-  const [scanSummary, setScanSummary] = useState<{ total_found: number; total_matches: number } | null>(null)
-  const [showLogDetail, setShowLogDetail] = useState(false)
+  const [scanStatus, setScanStatus] = useState<ScanStatus | null>(null)
+  const [showLog, setShowLog] = useState(false)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const logBoxRef = useRef<HTMLDivElement>(null)
+
+  // Toast state
   const [toast, setToast] = useState('')
   const [weeklyReportLoading, setWeeklyReportLoading] = useState(false)
   const [weeklyReportToast, setWeeklyReportToast] = useState('')
@@ -52,28 +64,70 @@ export default function TabDeals({ user }: { user: User }) {
     load(viewMode)
   }, [load, viewMode])
 
+  // Auto-scroll log to bottom when new lines arrive
+  useEffect(() => {
+    if (logBoxRef.current) {
+      logBoxRef.current.scrollTop = logBoxRef.current.scrollHeight
+    }
+  }, [scanStatus?.log?.length])
+
+  // Cleanup poll on unmount
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current)
+    }
+  }, [])
+
   const filteredByCity =
     cityFilter && cityFilter !== 'הכל'
       ? properties.filter((p) => (p.city || '').trim() === cityFilter)
       : properties
 
+  // ------------------------------------------------------------------
+  // Scan with live status polling
+  // ------------------------------------------------------------------
+
   async function handleRunScan() {
+    if (scanning) return
+
     setScanning(true)
-    setScanLog([])
-    setScanSummary(null)
-    setShowLogDetail(false)
+    setScanStatus(null)
+    setShowLog(false)
+    setToast('')
+
     try {
-      const res = await runScan()
-      setScanLog(res.log)
-      setScanSummary({ total_found: res.total_found, total_matches: res.total_matches })
-      setToast('הסריקה הושלמה — ' + res.total_matches + ' התאמות חדשות')
-      load('latest')
-      setViewMode('latest')
+      await startScan()
     } catch (err) {
-      setScanLog([{ time: '', level: 'error', message: err instanceof Error ? err.message : 'שגיאה' }])
-    } finally {
+      setScanStatus({
+        running: false,
+        finished: true,
+        message: err instanceof Error ? err.message : 'שגיאה בהתחלת סריקה',
+        total_found: 0,
+        total_matches: 0,
+        log: [{ time: '', level: 'error', message: err instanceof Error ? err.message : 'שגיאה' }],
+      })
       setScanning(false)
+      return
     }
+
+    // Poll /scan/status every 2 seconds
+    pollRef.current = setInterval(async () => {
+      try {
+        const status = await getScanStatus()
+        setScanStatus(status)
+
+        if (status.finished && !status.running) {
+          if (pollRef.current) clearInterval(pollRef.current)
+          pollRef.current = null
+          setScanning(false)
+          setToast(`הסריקה הושלמה — ${status.total_matches} התאמות חדשות`)
+          load('latest')
+          setViewMode('latest')
+        }
+      } catch {
+        // Network hiccup — keep polling, don't abort
+      }
+    }, 2000)
   }
 
   async function handleWeeklyReport() {
@@ -139,7 +193,7 @@ export default function TabDeals({ user }: { user: User }) {
           disabled={scanning}
           className="flex-1 sm:flex-none px-4 sm:px-5 py-3 rounded-xl font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-colors text-sm"
         >
-          {scanning ? 'סורק...' : 'שלח את הסוכן לסרוק'}
+          {scanning ? 'הסוכן עובד...' : 'שלח את הסוכן לסרוק'}
         </button>
         <button
           type="button"
@@ -154,44 +208,55 @@ export default function TabDeals({ user }: { user: User }) {
       {weeklyReportToast && <p className="text-teal-600 font-medium text-sm">{weeklyReportToast}</p>}
       <p className="text-xs text-slate-500">דוח שבועי נשלח אוטומטית גם כל חמישי ב‑21:00 למייל שלך.</p>
 
-      {/* Scan progress / summary */}
-      {(scanning || scanLog.length > 0) && (
-        <div className="bg-white rounded-2xl border-2 border-teal-100 shadow-sm p-4 sm:p-6">
-          <h3 className="text-sm sm:text-base font-semibold text-slate-800 mb-3">
-            {scanning ? 'הסוכן עובד עכשיו' : 'סיכום הסריקה'}
-          </h3>
-          {scanning ? (
-            <ul className="text-slate-600 text-sm space-y-1 list-none">
-              <li>• סורק אתרים (Yad2, Madlan וכו')</li>
-              <li>• בודק התאמה להעדפות</li>
-              <li>• מנתח עם AI ושומר התאמות</li>
-            </ul>
-          ) : scanSummary ? (
-            <>
-              <ul className="text-slate-600 text-sm space-y-1 mb-3 list-none">
-                <li>• נסרקו {scanSummary.total_found} דירות</li>
-                <li>• נשמרו {scanSummary.total_matches} התאמות חדשות</li>
-              </ul>
+      {/* Live scan console — shown as soon as scanning starts */}
+      {(scanning || scanStatus) && (
+        <div className="bg-slate-900 rounded-2xl border border-slate-700 shadow-lg overflow-hidden">
+          {/* Console header */}
+          <div className="flex items-center justify-between px-4 py-2.5 bg-slate-800 border-b border-slate-700">
+            <div className="flex items-center gap-2">
+              {scanning && (
+                <span className="inline-block w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
+              )}
+              <span className="text-xs font-semibold text-slate-200">
+                {scanning ? 'הסוכן עובד' : 'סיכום סריקה'}
+              </span>
+            </div>
+            {scanStatus && !scanning && (
               <button
                 type="button"
-                onClick={() => setShowLogDetail(!showLogDetail)}
-                className="text-sm font-medium text-teal-600 hover:text-teal-700 focus:outline-none"
+                onClick={() => setShowLog(!showLog)}
+                className="text-xs text-slate-400 hover:text-slate-200 transition-colors focus:outline-none"
               >
-                {showLogDetail ? 'הסתר פירוט' : 'הצג פירוט לוג'}
+                {showLog ? 'הסתר לוג' : 'הצג לוג מלא'}
               </button>
-              {showLogDetail && (
-                <div className="mt-3 p-4 rounded-xl bg-slate-50 border border-slate-200 max-h-48 overflow-auto font-mono text-xs text-slate-600">
-                  {scanLog.map((line, idx) => (
-                    <div key={idx} className={line.level === 'error' ? 'text-red-600' : ''}>
-                      {line.time && <span className="text-slate-400 mr-2">{line.time}</span>}
-                      {line.message}
-                    </div>
-                  ))}
+            )}
+          </div>
+
+          {/* Current status line */}
+          <div className="px-4 py-3">
+            <p className="text-sm font-mono text-teal-300 leading-relaxed">
+              {scanStatus?.message ?? 'מתחיל סריקה...'}
+            </p>
+            {scanStatus?.finished && !scanning && (
+              <p className="mt-1 text-xs text-slate-400 font-mono">
+                נסרקו {scanStatus.total_found} דירות · נשמרו {scanStatus.total_matches} התאמות
+              </p>
+            )}
+          </div>
+
+          {/* Scrollable log — toggled by "הצג לוג מלא" */}
+          {showLog && scanStatus && scanStatus.log.length > 0 && (
+            <div
+              ref={logBoxRef}
+              className="px-4 pb-4 max-h-56 overflow-y-auto font-mono text-xs space-y-0.5 border-t border-slate-700 pt-3"
+            >
+              {scanStatus.log.map((line, idx) => (
+                <div key={idx} className={LOG_LEVEL_CLASS[line.level] ?? 'text-slate-300'}>
+                  {line.time && <span className="text-slate-500 mr-2">{line.time}</span>}
+                  {line.message}
                 </div>
-              )}
-            </>
-          ) : (
-            <p className="text-red-600 text-sm">{scanLog.map((l) => l.message).join(' ')}</p>
+              ))}
+            </div>
           )}
         </div>
       )}

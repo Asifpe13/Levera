@@ -1,4 +1,5 @@
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
+const FETCH_TIMEOUT_MS = 60_000;
 
 function getToken(): string | null {
   return localStorage.getItem('aigent_token');
@@ -24,15 +25,29 @@ async function request<T>(
     ...(rest.headers as Record<string, string>),
   };
   if (token && !path.startsWith('/auth')) headers['Authorization'] = 'Bearer ' + token;
-  const res = await fetch(buildUrl(path, params), {
-    ...rest,
-    headers,
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error((err as { detail?: string }).detail || res.statusText);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+  try {
+    const res = await fetch(buildUrl(path, params), {
+      ...rest,
+      headers,
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error((err as { detail?: string }).detail || res.statusText);
+    }
+    return res.json();
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error('הבקשה לקחה יותר מדי זמן — נסה שוב');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-  return res.json();
 }
 
 export interface LoginRes {
@@ -60,16 +75,17 @@ export interface User {
   extra_preferences: string | null;
 }
 
-export function login(email: string, rememberMe: boolean): Promise<LoginRes> {
+export function login(email: string, password: string, rememberMe: boolean): Promise<LoginRes> {
   return request<LoginRes>('/auth/login', {
     method: 'POST',
-    body: JSON.stringify({ email: email.trim(), remember_me: rememberMe }),
+    body: JSON.stringify({ email: email.trim(), password, remember_me: rememberMe }),
   });
 }
 
 export function register(body: {
   name: string;
   email: string;
+  password: string;
   equity: number;
   monthly_income: number;
   max_repayment_ratio: number;
@@ -155,15 +171,27 @@ export function getProperties(params?: {
   return request<Property[]>('/properties/', { params: q }).then((r) => (Array.isArray(r) ? r : []));
 }
 
-export interface ScanResult {
-  ok: boolean;
-  log: { time: string; level: string; message: string }[];
-  total_found: number;
-  total_matches: number;
+export interface ScanStartResult {
+  status: 'started' | 'already_running';
 }
 
-export function runScan(): Promise<ScanResult> {
-  return request<ScanResult>('/scan/', { method: 'POST' });
+export interface ScanStatus {
+  running: boolean;
+  finished: boolean;
+  message: string;
+  total_found: number;
+  total_matches: number;
+  log: { time: string; level: string; message: string }[];
+}
+
+/** Fire-and-forget: returns immediately while the scan runs in the background. */
+export function startScan(): Promise<ScanStartResult> {
+  return request<ScanStartResult>('/scan/', { method: 'POST' });
+}
+
+/** Poll this every 2 s to get the current Hebrew progress message. */
+export function getScanStatus(): Promise<ScanStatus> {
+  return request<ScanStatus>('/scan/status');
 }
 
 export interface WeeklyReportResult {

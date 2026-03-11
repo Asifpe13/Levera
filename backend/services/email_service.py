@@ -1,17 +1,101 @@
 import os
 import smtplib
+import urllib.request
 from datetime import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
 from io import BytesIO
+from pathlib import Path
 from typing import Optional
 from xml.sax.saxutils import escape as xml_escape
 
 from jinja2 import Environment, FileSystemLoader
 from loguru import logger
 
+# ---------------------------------------------------------------------------
+# Hebrew font helpers
+# ---------------------------------------------------------------------------
+
+_FONT_DIR = Path(__file__).resolve().parent.parent / "fonts"
+_FONT_PATH = _FONT_DIR / "Heebo-Regular.ttf"
+_FONT_NAME = "Heebo"
+_FONT_URL = (
+    "https://github.com/google/fonts/raw/main/ofl/heebo/static/Heebo-Regular.ttf"
+)
+# Common system paths where a Unicode font with Hebrew glyphs might live
+_SYSTEM_FONT_CANDIDATES = [
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+    "C:/Windows/Fonts/arial.ttf",
+    "/Library/Fonts/Arial Unicode MS.ttf",
+]
+
+
+def _find_or_download_font() -> str | None:
+    """Return a path to a Hebrew-capable TrueType font.
+
+    Priority:
+    1. Cached Heebo in backend/fonts/
+    2. Common system fonts
+    3. Download Heebo from Google Fonts GitHub and cache it
+    """
+    if _FONT_PATH.exists() and _FONT_PATH.stat().st_size > 10_000:
+        return str(_FONT_PATH)
+
+    for path in _SYSTEM_FONT_CANDIDATES:
+        if Path(path).exists():
+            return path
+
+    try:
+        _FONT_DIR.mkdir(parents=True, exist_ok=True)
+        logger.info("Downloading Heebo font for PDF Hebrew support…")
+        urllib.request.urlretrieve(_FONT_URL, str(_FONT_PATH))
+        if _FONT_PATH.exists() and _FONT_PATH.stat().st_size > 10_000:
+            logger.info("Heebo font downloaded successfully")
+            return str(_FONT_PATH)
+    except Exception as exc:
+        logger.warning(f"Could not download Hebrew font: {exc}")
+
+    return None
+
+
+def _register_hebrew_font() -> str:
+    """Register a Hebrew-capable TTFont with ReportLab. Returns the font name to use."""
+    try:
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+    except ImportError:
+        return "Helvetica"
+
+    font_path = _find_or_download_font()
+    if not font_path:
+        logger.warning("No Hebrew font found — PDF will show squares for Hebrew text")
+        return "Helvetica"
+
+    font_name = _FONT_NAME if "Heebo" in font_path else "DejaVuSans"
+    try:
+        pdfmetrics.registerFont(TTFont(font_name, font_path))
+        return font_name
+    except Exception as exc:
+        logger.warning(f"Could not register Hebrew font: {exc}")
+        return "Helvetica"
+
+
+def _bidi(text: str) -> str:
+    """Apply the Unicode bidi algorithm so Hebrew reads RTL inside a LTR PDF."""
+    try:
+        from bidi.algorithm import get_display  # type: ignore
+        return get_display(text)
+    except Exception:
+        return text
+
+
+# ---------------------------------------------------------------------------
+# PDF generation
+# ---------------------------------------------------------------------------
 
 def _generate_weekly_report_pdf(
     user_name: str,
@@ -19,15 +103,18 @@ def _generate_weekly_report_pdf(
     properties: list[dict],
     ai_summary: Optional[str] = None,
 ) -> bytes:
-    """Generate a PDF report with clickable links to each property."""
+    """Generate a PDF report with clickable links and correct Hebrew rendering."""
     try:
+        from reportlab.lib.colors import HexColor
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib.units import mm
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
     except ImportError:
         logger.warning("reportlab not installed — PDF report skipped")
         return b""
+
+    font_name = _register_hebrew_font()
 
     buffer = BytesIO()
     doc = SimpleDocTemplate(
@@ -38,41 +125,41 @@ def _generate_weekly_report_pdf(
         topMargin=20 * mm,
         bottomMargin=20 * mm,
     )
+
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        "CustomTitle",
-        parent=styles["Heading1"],
-        fontSize=18,
-        spaceAfter=12,
-    )
-    heading_style = ParagraphStyle(
-        "CustomHeading",
-        parent=styles["Heading2"],
-        fontSize=14,
-        spaceAfter=8,
-    )
-    normal_style = styles["Normal"]
-    link_style = ParagraphStyle(
-        "Link",
-        parent=normal_style,
-        textColor="blue",
-        spaceAfter=14,
+
+    def _style(name: str, parent_name: str = "Normal", **kwargs) -> ParagraphStyle:
+        return ParagraphStyle(
+            name,
+            parent=styles[parent_name],
+            fontName=font_name,
+            **kwargs,
+        )
+
+    title_style = _style("HTitle", "Heading1", fontSize=18, spaceAfter=10)
+    heading_style = _style("HHeading", "Heading2", fontSize=13, spaceAfter=7)
+    normal_style = _style("HNormal", fontSize=10, spaceAfter=4)
+    link_style = _style(
+        "HLink", fontSize=10, textColor=HexColor("#0066cc"), spaceAfter=12
     )
 
+    def p(text: str, style=None) -> Paragraph:
+        return Paragraph(_bidi(text), style or normal_style)
+
     story = []
-    story.append(Paragraph("דו\"ח שבועי — סוכן הנדל\"ן", title_style))
-    story.append(Paragraph(f"שלום {xml_escape(user_name)}, תאריך: {xml_escape(report_date)}", normal_style))
+    story.append(p('דו"ח שבועי — Levera', title_style))
+    story.append(p(f"שלום {xml_escape(user_name)}, תאריך: {xml_escape(report_date)}"))
     story.append(Spacer(1, 8 * mm))
 
     if ai_summary:
-        story.append(Paragraph("סיכום:", heading_style))
-        story.append(Paragraph(xml_escape(ai_summary[:500]), normal_style))
+        story.append(p("סיכום:", heading_style))
+        story.append(p(xml_escape(ai_summary[:500])))
         story.append(Spacer(1, 6 * mm))
 
-    story.append(Paragraph("הדירות שנמצאו (עם קישורים למודעות):", heading_style))
+    story.append(p("הדירות שנמצאו (עם קישורים למודעות):", heading_style))
     story.append(Spacer(1, 4 * mm))
 
-    for i, prop in enumerate(properties):
+    for prop in properties:
         city = (prop.get("city") or "").strip() or "—"
         neighborhood = (prop.get("neighborhood") or "").strip()
         location = f"{city}, {neighborhood}" if neighborhood else city
@@ -81,24 +168,23 @@ def _generate_weekly_report_pdf(
         price = prop.get("price")
         price_str = f"{price:,.0f} ₪" if price else "—"
         score = prop.get("ai_score")
-        score_str = f"ציון {score}" if score is not None else ""
+        score_str = f" — ציון {score}" if score is not None else ""
 
-        line = f"{xml_escape(location)} — {rooms_str} חדרים — {price_str}"
-        if score_str:
-            line += f" — {score_str}"
-        story.append(Paragraph(line, normal_style))
+        story.append(p(f"{xml_escape(location)} — {rooms_str} חדרים — {price_str}{score_str}"))
 
         listing_url = (prop.get("listing_url") or "").strip()
         if listing_url:
             safe_url = xml_escape(listing_url)
             story.append(
                 Paragraph(
-                    f'<a href="{safe_url}" color="blue">צפה במודעה המלאה (קישור למודעה)</a>',
+                    f'<a href="{safe_url}" color="#0066cc">'
+                    + _bidi("צפה במודעה המלאה")
+                    + "</a>",
                     link_style,
                 )
             )
         else:
-            story.append(Paragraph("(קישור לא זמין)", normal_style))
+            story.append(p("(קישור לא זמין)"))
         story.append(Spacer(1, 3 * mm))
 
     doc.build(story)

@@ -8,6 +8,7 @@ export default function LoginPage() {
   const navigate = useNavigate()
   const { setToken } = useAuth()
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [rememberMe, setRememberMe] = useState(false)
   const [error, setError] = useState('')
 
@@ -19,13 +20,13 @@ export default function LoginPage() {
       return
     }
     try {
-      const res = await login(email, rememberMe)
+      const res = await login(email, password, rememberMe)
       if (res.token) {
         setToken(res.token)
         navigate('/app', { replace: true })
         return
       }
-      setError('לא נמצא חשבון עם אימייל זה. עבור להרשמה חדשה כדי ליצור חשבון.')
+      setError('לא נמצא חשבון עם אימייל זה — צור חשבון חדש.')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'שגיאה בהתחברות')
     }
@@ -120,6 +121,21 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="your@email.com"
                 className="levera-input"
+                autoComplete="email"
+              />
+            </div>
+            <div>
+              <label htmlFor="password" className="levera-label">
+                סיסמה
+              </label>
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="הסיסמה שלך"
+                className="levera-input"
+                autoComplete="current-password"
               />
             </div>
             <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-600">

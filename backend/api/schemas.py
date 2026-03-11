@@ -5,17 +5,19 @@ from pydantic import BaseModel
 
 class LoginRequest(BaseModel):
     email: str
+    password: str = ""       # empty string keeps backward compat for legacy accounts
     remember_me: bool = False
 
 
 class LoginResponse(BaseModel):
     email: str
-    token: Optional[str] = None  # only if remember_me
+    token: Optional[str] = None
 
 
 class RegisterRequest(BaseModel):
     name: str
     email: str
+    password: str = ""       # hashed before storage; never returned
     equity: int = 400_000
     monthly_income: int = 12_500
     max_repayment_ratio: float = 0.40

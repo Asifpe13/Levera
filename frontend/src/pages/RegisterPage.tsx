@@ -20,6 +20,8 @@ export default function RegisterPage() {
   const [cities, setCities] = useState<string[]>([])
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [passwordConfirm, setPasswordConfirm] = useState('')
   const [equity, setEquity] = useState(400_000)
   const [monthlyIncome, setMonthlyIncome] = useState(12_500)
   const [maxRepaymentRatio, setMaxRepaymentRatio] = useState(40)
@@ -46,6 +48,14 @@ export default function RegisterPage() {
       setError('יש להזין שם ואימייל')
       return
     }
+    if (!password || password.length < 6) {
+      setError('הסיסמה חייבת להכיל לפחות 6 תווים')
+      return
+    }
+    if (password !== passwordConfirm) {
+      setError('הסיסמאות אינן תואמות')
+      return
+    }
     if (targetCities.length === 0) {
       setError('יש לבחור לפחות עיר אחת')
       return
@@ -54,6 +64,7 @@ export default function RegisterPage() {
       const res = await register({
         name: name.trim(),
         email: email.trim(),
+        password,
         equity,
         monthly_income: monthlyIncome,
         max_repayment_ratio: maxRepaymentRatio / 100,
@@ -167,6 +178,31 @@ export default function RegisterPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@email.com"
+                    autoComplete="email"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                <div>
+                  <label className={labelClass}>סיסמה (לפחות 6 תווים)</label>
+                  <input
+                    type="password"
+                    className={inputClass}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="בחר סיסמה"
+                    autoComplete="new-password"
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>אימות סיסמה</label>
+                  <input
+                    type="password"
+                    className={inputClass}
+                    value={passwordConfirm}
+                    onChange={(e) => setPasswordConfirm(e.target.value)}
+                    placeholder="חזור על הסיסמה"
+                    autoComplete="new-password"
                   />
                 </div>
               </div>

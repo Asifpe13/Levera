@@ -35,5 +35,11 @@ plotly>=5.18.0
 # Utilities
 loguru>=0.7.2
 
+# Security
+passlib[bcrypt]>=1.7.4
+
+# RTL text rendering (Hebrew PDF support)
+python-bidi>=0.4.2
+
 # Testing
 pytest>=8.0.0
