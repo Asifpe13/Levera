@@ -104,7 +104,7 @@ export default function DashboardPage() {
           </nav>
 
           <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg shadow-slate-200/50 border border-slate-200/80 p-4 sm:p-8 min-h-[400px]">
-            {tab === 'deals' && <TabDeals user={user} />}
+            {tab === 'deals' && <TabDeals user={user} onGoToSettings={() => setTab('settings')} />}
             {tab === 'profiles' && (
               <TabProfiles
                 user={user}

@@ -24,6 +24,85 @@ const LOG_LEVEL_CLASS: Record<string, string> = {
 }
 
 // ---------------------------------------------------------------------------
+// Smart tip logic
+// ---------------------------------------------------------------------------
+
+interface Tip {
+  text: string
+  detail: string
+}
+
+function generateSmartTip(rejections: ScanRejections, total: number): Tip | null {
+  if (!total) return null
+
+  const mortgage = (rejections.high_mortgage ?? 0) + (rejections.over_budget ?? 0)
+  const rooms    = rejections.wrong_rooms ?? 0
+  const noise    = (rejections.suspicious ?? 0) + (rejections.irrelevant ?? 0) + (rejections.low_score ?? 0)
+
+  // Find the dominant rejection reason
+  const max = Math.max(mortgage, rooms, noise)
+  if (max === 0) return null
+
+  // Must affect at least 20 % of scanned listings to generate a tip
+  if (max / total < 0.05) return null
+
+  if (max === mortgage) {
+    if (rejections.over_budget ?? 0 > (rejections.high_mortgage ?? 0)) {
+      return {
+        text: 'רוב הדירות נפסלו כי מחירן גבוה מהתקציב שהגדרת.',
+        detail: 'כדאי לשקול הרחבת החיפוש לערים שכנות, הגדלת ההון העצמי ב‑50,000–100,000 ₪, או הגדלת מחיר המקסימום.',
+      }
+    }
+    return {
+      text: 'רוב הדירות נפסלו בגלל שהחזר המשכנתא גבוה מהגדרת ה‑40% שלך.',
+      detail: 'ניתן להאריך את תקופת המשכנתא ב‑5 שנים (מוריד את ההחזר ב‑200–300 ₪ בחודש) או להגדיל את ההון העצמי.',
+    }
+  }
+
+  if (max === rooms) {
+    return {
+      text: 'הרבה דירות נפסלו כי טווח החדרים שהגדרת צר מדי לשוק הנוכחי.',
+      detail: 'כדאי לנסות להרחיב את טווח החדרים ב‑0.5 חדר לכל כיוון — כך הסוכן יוכל למצוא יותר הזדמנויות.',
+    }
+  }
+
+  if (max === noise) {
+    return {
+      text: 'באזורים שבחרת יש ריכוז גבוה של מודעות לא רלוונטיות (דירות שותפים, מחסנים, מפרסמים לא אמינים).',
+      detail: 'כדאי לנסות להוסיף ערים נוספות עם שוק אמין יותר, או להסיר ערים שמייצרות הרבה "רעש".',
+    }
+  }
+
+  return null
+}
+
+// ---------------------------------------------------------------------------
+// Smart tip UI card
+// ---------------------------------------------------------------------------
+
+function SmartTip({ tip, onGoToSettings }: { tip: Tip; onGoToSettings: () => void }) {
+  return (
+    <div className="flex gap-3 items-start bg-amber-50 border border-amber-200 rounded-2xl px-4 py-4 shadow-sm">
+      <span className="text-2xl leading-none mt-0.5 shrink-0" aria-hidden>💡</span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-amber-900 mb-0.5">
+          הטיפ של Levera: {tip.text}
+        </p>
+        <p className="text-xs text-amber-800 leading-relaxed mb-3">{tip.detail}</p>
+        <button
+          type="button"
+          onClick={onGoToSettings}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-1"
+        >
+          <span>⚙️</span>
+          לעדכון הגדרות
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Rejection breakdown panel
 // ---------------------------------------------------------------------------
 
@@ -79,7 +158,13 @@ function RejectionBreakdown({
 
 // ---------------------------------------------------------------------------
 
-export default function TabDeals({ user }: { user: User }) {
+export default function TabDeals({
+  user,
+  onGoToSettings,
+}: {
+  user: User
+  onGoToSettings?: () => void
+}) {
   const [viewMode, setViewMode] = useState<ViewMode>('latest')
   const [properties, setProperties] = useState<Property[]>([])
   const [loading, setLoading] = useState(true)
@@ -91,6 +176,7 @@ export default function TabDeals({ user }: { user: User }) {
   const [scanning, setScanning] = useState(false)
   const [scanStatus, setScanStatus] = useState<ScanStatus | null>(null)
   const [showLog, setShowLog] = useState(false)
+  const [smartTip, setSmartTip] = useState<Tip | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const logBoxRef = useRef<HTMLDivElement>(null)
 
@@ -150,6 +236,7 @@ export default function TabDeals({ user }: { user: User }) {
     setScanStatus(null)
     setShowLog(false)
     setToast('')
+    setSmartTip(null)
 
     // Attempt to start the scan, but DO NOT stop if it times out.
     // On Render free-tier the cold-start can exceed 60 s; the backend
@@ -204,6 +291,7 @@ export default function TabDeals({ user }: { user: User }) {
           pollRef.current = null
           setScanning(false)
           setToast(`הסריקה הושלמה — ${status.total_matches} התאמות חדשות`)
+          setSmartTip(generateSmartTip(status.rejections ?? {}, status.total_found))
           load('latest')
           setViewMode('latest')
         }
@@ -353,6 +441,14 @@ export default function TabDeals({ user }: { user: User }) {
       )}
 
       {toast && <p className="text-teal-600 font-medium text-sm">{toast}</p>}
+
+      {/* Smart tip — shown after scan finishes if a dominant rejection reason is detected */}
+      {smartTip && (
+        <SmartTip
+          tip={smartTip}
+          onGoToSettings={onGoToSettings ?? (() => {})}
+        />
+      )}
 
       {/* View toggle: Latest Scan / All Properties */}
       <div className="flex items-center gap-3 pb-4 border-b border-slate-200">
