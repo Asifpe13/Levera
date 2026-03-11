@@ -261,6 +261,7 @@ export default function TabDeals({
           total_found: 0,
           total_matches: 0,
           log: [],
+          rejections: {},
         })
       } else {
         // Definitive failure (4xx / network down)
@@ -272,6 +273,7 @@ export default function TabDeals({
           total_found: 0,
           total_matches: 0,
           log: [{ time: '', level: 'error', message: msg || 'שגיאה' }],
+          rejections: {},
         })
         setScanning(false)
       }
