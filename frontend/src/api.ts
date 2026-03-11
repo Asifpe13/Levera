@@ -193,6 +193,8 @@ export interface ScanStatus {
   total_matches: number;
   log: { time: string; level: string; message: string }[];
   rejections: ScanRejections;
+  /** 0-100 progress percentage. 0 = idle, 5 = started, 35 = scrapers done, 100 = finished. */
+  progress?: number;
 }
 
 /** Fire-and-forget: returns immediately while the scan runs in the background. */

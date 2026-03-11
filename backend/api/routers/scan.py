@@ -142,6 +142,12 @@ def _run_scan_bg(email: str, db: DatabaseManager) -> None:
       Phase 2  Filtering   — deterministic check_property_fit per listing.
       Phase 3  AI batches  — AI analysis in groups of _AI_BATCH_SIZE so the
                              UI receives incremental progress messages.
+
+    Progress milestones:
+       5%  — task started
+      35%  — all scrapers finished
+      35–95%  — AI batches (proportional)
+     100%  — finished
     """
     print(f"DEBUG: Background scan task actually started for {email}", flush=True)
     from config import MIN_AI_SCORE_FOR_ALERT, build_listing_url
@@ -154,6 +160,7 @@ def _run_scan_bg(email: str, db: DatabaseManager) -> None:
 
     total_found = 0
     total_matches = 0
+    progress = 5
     rejections: dict[str, int] = {
         "high_mortgage": 0,
         "over_budget":   0,
@@ -164,15 +171,25 @@ def _run_scan_bg(email: str, db: DatabaseManager) -> None:
         "other":         0,
     }
 
-    def log(msg: str, level: str = "info") -> None:
+    def _push_state(msg: str, level: str = "info") -> None:
+        """Append a log line and flush all scan-state fields to _scan_states."""
         _append_log(email, msg, level)
         with _scan_lock:
             state = _scan_states.setdefault(email, {})
-            state["running"] = True
-            state["message"] = msg
-            state["total_found"] = total_found
+            state["running"]       = True
+            state["finished"]      = False
+            state["message"]       = msg
+            state["total_found"]   = total_found
             state["total_matches"] = total_matches
-            state["rejections"] = dict(rejections)
+            state["rejections"]    = dict(rejections)
+            state["progress"]      = progress
+
+    # Guarantee running=True is visible the instant the task starts
+    with _scan_lock:
+        state = _scan_states.setdefault(email, {})
+        state["running"]   = True
+        state["finished"]  = False
+        state["progress"]  = progress
 
     try:
         user = db.get_user_by_email(email)
@@ -189,20 +206,19 @@ def _run_scan_bg(email: str, db: DatabaseManager) -> None:
         if search_type in ("rent", "both"):
             deal_types.append("rent")
 
-        log("🤖 הסוכן מתעורר ומתחיל סריקה...")
-        log(
+        _push_state("🤖 הסוכן מתעורר ומתחיל סריקה...")
+        _push_state(
             f"📋 פרמטרים: {', '.join(cities)} | "
             f"{user.get('room_range_min', 3)}–{user.get('room_range_max', 5)} חדרים | "
             f"{', '.join(deal_types)}"
         )
 
         engine = ScanEngine(db=db)
-        # Compute city price averages once — reused for every property enrichment
         city_avg = db.get_avg_price_per_room_by_city(email)
 
         for dt in deal_types:
             label = "מכירה" if dt == "sale" else "שכירות"
-            log(f"🔄 סורק {label} במקביל בכל האתרים...")
+            _push_state(f"🔄 סורק {label} במקביל בכל האתרים...")
 
             rooms_min = (
                 user.get("rent_room_range_min", 1) if dt == "rent"
@@ -229,10 +245,10 @@ def _run_scan_bg(email: str, db: DatabaseManager) -> None:
             }
 
             scrapers_list = [
-                ("Yad2",    Yad2ApiScraper(deal_type=dt)),
-                ("Madlan",  MadlanScraper(deal_type=dt)),
+                ("Yad2",     Yad2ApiScraper(deal_type=dt)),
+                ("Madlan",   MadlanScraper(deal_type=dt)),
                 ("Homeless", HomelessScraper(deal_type=dt)),
-                ("WinWin",  WinWinScraper(deal_type=dt)),
+                ("WinWin",   WinWinScraper(deal_type=dt)),
             ]
 
             # ── Phase 1: parallel scraping ────────────────────────────────
@@ -253,13 +269,17 @@ def _run_scan_bg(email: str, db: DatabaseManager) -> None:
                 for future in as_completed(future_to_name):
                     name, results, err = future.result()
                     if err:
-                        log(f"  ✗ {name}: שגיאה — {err[:60]}", "error")
+                        _push_state(f"  ✗ {name}: שגיאה — {err[:60]}", "error")
                     elif results:
-                        log(f"  ✓ {name}: נמצאו {len(results)} דירות", "success")
+                        _push_state(f"  ✓ {name}: נמצאו {len(results)} דירות", "success")
                         all_raw.extend(results)
                         total_found += len(results)
                     else:
-                        log(f"  — {name}: אין תוצאות", "warn")
+                        _push_state(f"  — {name}: אין תוצאות", "warn")
+
+            # ── Milestone: scrapers done → 35% ───────────────────────────
+            progress = 35
+            _push_state(f"📋 סריקת האתרים הושלמה — {total_found} דירות נמצאו")
 
             # ── Phase 2: deterministic filtering ─────────────────────────
             candidates: list[dict] = []
@@ -276,15 +296,18 @@ def _run_scan_bg(email: str, db: DatabaseManager) -> None:
                     candidates.append(prop_data)
 
             if candidates:
-                log(f"📋 {len(candidates)} מועמדים עוברים לניתוח AI (מתוך {total_found} שנסרקו)")
+                _push_state(f"📋 {len(candidates)} מועמדים עוברים לניתוח AI (מתוך {total_found} שנסרקו)")
             else:
-                log(f"📋 אין מועמדים לניתוח AI לאחר סינון (נסרקו {total_found} דירות)", "warn")
+                _push_state(f"📋 אין מועמדים לניתוח AI לאחר סינון (נסרקו {total_found} דירות)", "warn")
 
             # ── Phase 3: AI analysis in batches ───────────────────────────
-            for batch_start in range(0, len(candidates), _AI_BATCH_SIZE):
+            total_candidates = len(candidates)
+            for batch_start in range(0, total_candidates, _AI_BATCH_SIZE):
                 batch = candidates[batch_start: batch_start + _AI_BATCH_SIZE]
-                batch_end = min(batch_start + _AI_BATCH_SIZE, len(candidates))
-                log(f"  🧠 AI: מנתח דירות {batch_start + 1}–{batch_end} מתוך {len(candidates)}...")
+                batch_end = min(batch_start + _AI_BATCH_SIZE, total_candidates)
+                _push_state(
+                    f"  🧠 AI: מנתח דירות {batch_start + 1}–{batch_end} מתוך {total_candidates}..."
+                )
 
                 for prop_data in batch:
                     analysis = engine.ai.analyze_property(prop_data, prefs)
@@ -310,7 +333,7 @@ def _run_scan_bg(email: str, db: DatabaseManager) -> None:
                     try:
                         db.add_property(prop_data)
                         total_matches += 1
-                        log(
+                        _push_state(
                             f"  🏠 נשמרה: {prop_data.get('city', '?')} | "
                             f"{prop_data.get('rooms', '?')} חד׳ | "
                             f"{prop_data.get('price', 0):,.0f}₪ | "
@@ -320,23 +343,31 @@ def _run_scan_bg(email: str, db: DatabaseManager) -> None:
                     except Exception:
                         pass
 
-                # Push incremental progress to the UI after every batch
-                log(f"  ✅ אצווה הושלמה — {total_matches} התאמות עד כה")
+                # Milestone: progress 35–95% proportional to AI batches processed
+                if total_candidates > 0:
+                    progress = 35 + round((batch_end / total_candidates) * 60)
+                _push_state(f"  ✅ אצווה הושלמה — {total_matches} התאמות עד כה")
 
-        log(f"📊 בסריקה זו: נסרקו {total_found} דירות, נשמרו {total_matches} התאמות חדשות")
+        _push_state(
+            f"📊 בסריקה זו: נסרקו {total_found} דירות, נשמרו {total_matches} התאמות חדשות"
+        )
         _append_log(email, "💤 הסוכן חוזר לישון.", "info")
 
     except Exception as e:
         _append_log(email, f"❌ שגיאה כללית: {str(e)[:120]}", "error")
     finally:
+        # running=False and finished=True only here — never earlier
         with _scan_lock:
             state = _scan_states.setdefault(email, {})
-            state["running"] = False
-            state["finished"] = True
-            state["total_found"] = total_found
+            state["running"]       = False
+            state["finished"]      = True
+            state["progress"]      = 100
+            state["total_found"]   = total_found
             state["total_matches"] = total_matches
-            state["rejections"] = dict(rejections)
-            state["message"] = f"הסריקה הושלמה — נמצאו {total_found} דירות, {total_matches} התאמות"
+            state["rejections"]    = dict(rejections)
+            state["message"]       = (
+                f"הסריקה הושלמה — נמצאו {total_found} דירות, {total_matches} התאמות"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -362,6 +393,8 @@ def run_scan(
             "total_found": 0,
             "total_matches": 0,
             "log": [],
+            "progress": 5,
+            "rejections": {},
         }
 
     # ── Queue background work and return immediately ──
@@ -384,6 +417,7 @@ def get_scan_status(email: str = Depends(get_current_user_email)):
                 "total_matches": 0,
                 "log": [],
                 "rejections": {},
+                "progress": 0,
             },
         )
         return dict(state)

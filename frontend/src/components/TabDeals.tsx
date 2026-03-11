@@ -364,9 +364,19 @@ export default function TabDeals({
           type="button"
           onClick={handleRunScan}
           disabled={scanning}
-          className="flex-1 sm:flex-none px-4 sm:px-5 py-3 rounded-xl font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-colors text-sm"
+          className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 sm:px-5 py-3 rounded-xl font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-colors text-sm"
         >
-          {scanning ? 'הסוכן עובד...' : 'שלח את הסוכן לסרוק'}
+          {scanning ? (
+            <>
+              <svg className="animate-spin h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+              </svg>
+              סורק דירות...
+            </>
+          ) : (
+            'שלח את הסוכן לסרוק'
+          )}
         </button>
         <button
           type="button"
@@ -384,14 +394,20 @@ export default function TabDeals({
       {/* Live scan console — shown as soon as scanning starts */}
       {(scanning || scanStatus) && (
         <div className="bg-slate-900 rounded-2xl border border-slate-700 shadow-lg overflow-hidden">
+
           {/* Console header */}
           <div className="flex items-center justify-between px-4 py-2.5 bg-slate-800 border-b border-slate-700">
             <div className="flex items-center gap-2">
-              {scanning && (
-                <span className="inline-block w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
+              {scanning ? (
+                <span className="inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+              ) : (
+                <span className="inline-block w-2 h-2 rounded-full bg-slate-500" />
               )}
-              <span className="text-xs font-semibold text-slate-200">
-                {scanning ? 'הסוכן עובד' : 'סיכום סריקה'}
+              <span className={`text-xs font-semibold ${scanning ? 'text-green-400 animate-pulse' : 'text-slate-300'}`}>
+                {scanning ? 'פעיל' : 'לא פעיל'}
+              </span>
+              <span className="text-xs text-slate-400 font-medium">
+                {scanning ? '— הסוכן עובד' : '— סיכום סריקה'}
               </span>
             </div>
             {scanStatus && !scanning && (
@@ -404,6 +420,16 @@ export default function TabDeals({
               </button>
             )}
           </div>
+
+          {/* Progress bar — visible during active scan and immediately after finish */}
+          {(scanning || scanStatus?.finished) && (
+            <div className="h-2 w-full bg-gray-700 overflow-hidden">
+              <div
+                className="h-full bg-blue-500 transition-all duration-500 rounded-r-full"
+                style={{ width: `${scanStatus?.progress ?? (scanning ? 5 : 100)}%` }}
+              />
+            </div>
+          )}
 
           {/* Current status line */}
           <div className="px-4 py-3">
