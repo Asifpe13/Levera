@@ -11,6 +11,7 @@ Brute-force protection:
 - A short sleep is injected on every failed attempt to slow down automated guessing
   even before the hard limit is reached.
 """
+import os
 import threading
 import time
 import uuid
@@ -18,7 +19,7 @@ from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 
 import bcrypt
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from api.deps import get_db
 from api.schemas import LoginRequest, LoginResponse, RegisterRequest, user_dict_to_response
@@ -45,16 +46,32 @@ def _verify(plain: str, hashed: str) -> bool:
 # Brute-force rate limiter  (in-memory, per email address)
 # ---------------------------------------------------------------------------
 
-_MAX_ATTEMPTS = 5        # maximum failures allowed inside the window
-_WINDOW_SECONDS = 300    # rolling 5-minute window
+_MAX_ATTEMPTS = 10       # maximum failures allowed inside the window
+_WINDOW_SECONDS = 60     # rolling 1-minute window
 _FAILURE_SLEEP = 1.0     # seconds to sleep after every failure (slows down bots)
 
 _failed: dict[str, list[float]] = defaultdict(list)
 _failed_lock = threading.Lock()
 
+# Localhost origins that are always whitelisted (never rate-limited)
+_LOCAL_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
 
-def _check_rate_limit(key: str) -> None:
-    """Raise 429 if the key (email) has exceeded the failure threshold."""
+
+def _is_debug_or_local(request: Request | None) -> bool:
+    """Return True when rate limiting should be skipped (debug mode or localhost)."""
+    if os.getenv("DEBUG_MODE", "").strip().lower() in ("1", "true", "yes"):
+        return True
+    if request is None:
+        return False
+    client_host = (request.client.host if request.client else "") or ""
+    return client_host in _LOCAL_HOSTS
+
+
+def _check_rate_limit(key: str, request: Request | None = None) -> None:
+    """Raise 429 if the key (email) has exceeded the failure threshold.
+    Skipped entirely when running in debug/local mode."""
+    if _is_debug_or_local(request):
+        return
     now = time.monotonic()
     with _failed_lock:
         recent = [t for t in _failed[key] if now - t < _WINDOW_SECONDS]
@@ -62,8 +79,8 @@ def _check_rate_limit(key: str) -> None:
         if len(recent) >= _MAX_ATTEMPTS:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="יותר מדי ניסיונות כושלים — נסה שוב עוד מספר דקות",
-                headers={"Retry-After": str(_WINDOW_SECONDS)},
+                detail="יותר מדי ניסיונות — נסה שוב בעוד דקה",
+                headers={"Retry-After": "60"},
             )
 
 
@@ -82,13 +99,13 @@ def _clear_failures(key: str) -> None:
 # ---------------------------------------------------------------------------
 
 @router.post("/login", response_model=LoginResponse)
-def login(body: LoginRequest, db: DatabaseManager = Depends(get_db)):
+def login(body: LoginRequest, request: Request, db: DatabaseManager = Depends(get_db)):
     email = (body.email or "").strip().lower()
     if not email:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="נדרשת כתובת אימייל")
 
     # Check rate limit before any DB call so we don't leak user-existence info
-    _check_rate_limit(email)
+    _check_rate_limit(email, request)
 
     user = db.get_user_by_email(email)
     if not user:
