@@ -98,7 +98,7 @@ def _build_profile_area_message(prop_data: dict, profile_type: str) -> str | Non
     return None
 
 
-def _enrich_property_insights(prop_data: dict, city_avg: dict, ai: AIService, profile_type: str) -> None:
+def _enrich_property_insights(prop_data: dict, city_avg: dict, ai: AIService, profile_type: str = "HOME_BUYER") -> None:
     """Set estimated_rent, annual_yield_pct, value_label, neighborhood_insights, profile_area_message. In-place."""
     price = prop_data.get("price") or 0
     rooms = prop_data.get("rooms")

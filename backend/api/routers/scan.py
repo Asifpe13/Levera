@@ -323,44 +323,60 @@ def _run_scan_bg(email: str, db: DatabaseManager) -> None:
                 )
 
                 for prop_data in batch:
-                    analysis = engine.ai.analyze_property(prop_data, prefs)
-                    ai_score = analysis.get("score", 0)
-                    ai_summary = analysis.get("summary", "")
+                    try:
+                        analysis = engine.ai.analyze_property(prop_data, prefs)
+                        ai_score = analysis.get("score", 0)
+                        ai_summary = analysis.get("summary", "")
 
-                    if ai_score < MIN_AI_SCORE_FOR_ALERT:
-                        bucket = _classify_ai_rejection(ai_summary)
-                        rejections[bucket] = rejections.get(bucket, 0) + 1
+                        if ai_score < MIN_AI_SCORE_FOR_ALERT:
+                            bucket = _classify_ai_rejection(ai_summary)
+                            rejections[bucket] = rejections.get(bucket, 0) + 1
+                            print(
+                                f"DEBUG AI REJECTION [{prop_data.get('source','?')}|{prop_data.get('city','?')}]: "
+                                f"Score: {ai_score} (threshold {MIN_AI_SCORE_FOR_ALERT}) | "
+                                f"Bucket: {bucket} | Summary: {ai_summary[:120]}",
+                                flush=True,
+                            )
+                            continue
+
+                        prop_data["matched_user_email"] = email
+                        prop_data["ai_score"] = ai_score
+                        prop_data["ai_summary"] = ai_summary
+                        prop_data["monthly_repayment"] = analysis.get("monthly_repayment_estimate")
+                        _enrich_property_insights(
+                            prop_data, city_avg, engine.ai,
+                            profile_type=user.get("profile_type", "HOME_BUYER"),
+                        )
+                        if not (prop_data.get("listing_url") or "").strip():
+                            prop_data["listing_url"] = build_listing_url(
+                                prop_data.get("source"),
+                                prop_data.get("source_id"),
+                                prop_data.get("deal_type"),
+                            )
+                        try:
+                            db.add_property(prop_data)
+                            total_matches += 1
+                            _push_state(
+                                f"  🏠 נשמרה: {prop_data.get('city', '?')} | "
+                                f"{prop_data.get('rooms', '?')} חד׳ | "
+                                f"{prop_data.get('price', 0):,.0f}₪ | "
+                                f"ציון {ai_score}",
+                                "success",
+                            )
+                        except Exception:
+                            pass  # duplicate key — property already stored
+
+                    except Exception as prop_err:
+                        # One bad property must never abort the whole batch
                         print(
-                            f"DEBUG AI REJECTION [{prop_data.get('source','?')}|{prop_data.get('city','?')}]: "
-                            f"Score: {ai_score} (threshold {MIN_AI_SCORE_FOR_ALERT}) | "
-                            f"Bucket: {bucket} | Summary: {ai_summary[:120]}",
+                            f"DEBUG PROP ERROR [{prop_data.get('source','?')}|{prop_data.get('city','?')}]: "
+                            f"{prop_err}",
                             flush=True,
                         )
-                        continue
-
-                    prop_data["matched_user_email"] = email
-                    prop_data["ai_score"] = ai_score
-                    prop_data["ai_summary"] = ai_summary
-                    prop_data["monthly_repayment"] = analysis.get("monthly_repayment_estimate")
-                    _enrich_property_insights(prop_data, city_avg, engine.ai)
-                    if not (prop_data.get("listing_url") or "").strip():
-                        prop_data["listing_url"] = build_listing_url(
-                            prop_data.get("source"),
-                            prop_data.get("source_id"),
-                            prop_data.get("deal_type"),
-                        )
-                    try:
-                        db.add_property(prop_data)
-                        total_matches += 1
                         _push_state(
-                            f"  🏠 נשמרה: {prop_data.get('city', '?')} | "
-                            f"{prop_data.get('rooms', '?')} חד׳ | "
-                            f"{prop_data.get('price', 0):,.0f}₪ | "
-                            f"ציון {ai_score}",
-                            "success",
+                            f"  ⚠️ שגיאה בעיבוד נכס ({prop_data.get('city','?')}): {str(prop_err)[:80]}",
+                            "warn",
                         )
-                    except Exception:
-                        pass
 
                 # Milestone: progress 35–95% proportional to AI batches processed
                 if total_candidates > 0:
