@@ -2,9 +2,12 @@ import os
 import re
 import json
 import time
+import threading
 from typing import Optional, Any
 
 from loguru import logger
+
+_AI_CALL_TIMEOUT = 25  # seconds — if Gemini doesn't respond, skip and use fallback
 
 # Max retries on 429 (rate limit); wait between retries from API or default 60s
 GEMINI_RATE_LIMIT_RETRIES = 2
@@ -76,39 +79,59 @@ class AIService:
         """
         Uses Gemini to analyze how well a property matches user preferences.
         Returns {"score": 0-100, "summary": str, "pros": list, "cons": list}
+
+        A hard _AI_CALL_TIMEOUT second ceiling is enforced via a background thread.
+        If Gemini doesn't respond in time the fallback rule-based analysis is returned
+        so the scan never hangs on a single property.
         """
         if not self.client:
             return self._fallback_analysis(property_data, user_prefs)
 
-        prompt = self._build_analysis_prompt(property_data, user_prefs)
-        system_instruction = (
-            'אתה מומחה נדל"ן ישראלי. תפקידך לנתח נכסים ולהעריך את ההתאמה שלהם לדרישות הרוכש. '
-            "ענה תמיד ב-JSON תקין בלבד, ללא טקסט נוסף."
-        )
+        result_holder: list[dict] = []
+        error_holder:  list[Exception] = []
 
-        try:
-            from google.genai import types
+        def _call() -> None:
+            try:
+                prompt = self._build_analysis_prompt(property_data, user_prefs)
+                system_instruction = (
+                    'אתה מומחה נדל"ן ישראלי. תפקידך לנתח נכסים ולהעריך את ההתאמה שלהם לדרישות הרוכש. '
+                    "ענה תמיד ב-JSON תקין בלבד, ללא טקסט נוסף."
+                )
+                from google.genai import types
+                config = types.GenerateContentConfig(
+                    system_instruction=system_instruction,
+                    max_output_tokens=1024,
+                    temperature=0.3,
+                )
+                response = _generate_with_retry(self.client, self.model_name, prompt, config)
+                text = response.text.strip()
+                if text.startswith("```"):
+                    text = text.split("\n", 1)[1].rsplit("```", 1)[0]
+                result_holder.append(json.loads(text))
+            except Exception as exc:
+                error_holder.append(exc)
 
-            config = types.GenerateContentConfig(
-                system_instruction=system_instruction,
-                max_output_tokens=1024,
-                temperature=0.3,
+        worker = threading.Thread(target=_call, daemon=True)
+        worker.start()
+        worker.join(timeout=_AI_CALL_TIMEOUT)
+
+        if worker.is_alive():
+            # Gemini call timed out — skip and fall back so the batch keeps moving
+            city = property_data.get("city", "?")
+            logger.warning(
+                f"LOG: Gemini call timed out after {_AI_CALL_TIMEOUT}s for {city} — using fallback"
             )
-            response = _generate_with_retry(self.client, self.model_name, prompt, config)
-
-            result_text = response.text.strip()
-            if result_text.startswith("```"):
-                result_text = result_text.split("\n", 1)[1]
-                result_text = result_text.rsplit("```", 1)[0]
-
-            return json.loads(result_text)
-
-        except json.JSONDecodeError as e:
-            logger.error(f"AI returned invalid JSON: {e}")
             return self._fallback_analysis(property_data, user_prefs)
-        except Exception as e:
-            logger.error(f"AI analysis failed: {e}")
+
+        if error_holder:
+            err = error_holder[0]
+            if isinstance(err, json.JSONDecodeError):
+                logger.error(f"AI returned invalid JSON: {err}")
+            else:
+                logger.error(f"AI analysis failed: {err}")
             return self._fallback_analysis(property_data, user_prefs)
+
+        return result_holder[0] if result_holder else self._fallback_analysis(property_data, user_prefs)
 
     def _build_analysis_prompt(self, property_data: dict, user_prefs: dict) -> str:
         price = property_data.get("price", 0) or 0

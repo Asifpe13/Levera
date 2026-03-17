@@ -38,7 +38,7 @@ _scan_lock = threading.Lock()
 # ---------------------------------------------------------------------------
 
 _CACHE_TTL = 600  # seconds
-_AI_BATCH_SIZE = 5
+_AI_BATCH_SIZE = 2
 
 _scraper_cache: dict[str, tuple[float, list[dict]]] = {}
 _cache_lock = threading.Lock()
@@ -318,6 +318,11 @@ def _run_scan_bg(email: str, db: DatabaseManager) -> None:
             for batch_start in range(0, total_candidates, _AI_BATCH_SIZE):
                 batch = candidates[batch_start: batch_start + _AI_BATCH_SIZE]
                 batch_end = min(batch_start + _AI_BATCH_SIZE, total_candidates)
+                print(
+                    f"LOG: Processing batch started — properties {batch_start + 1}–{batch_end} "
+                    f"of {total_candidates} for {email}",
+                    flush=True,
+                )
                 _push_state(
                     f"  🧠 AI: מנתח דירות {batch_start + 1}–{batch_end} מתוך {total_candidates}..."
                 )
@@ -378,10 +383,15 @@ def _run_scan_bg(email: str, db: DatabaseManager) -> None:
                             "warn",
                         )
 
-                # Milestone: progress 35–95% proportional to AI batches processed
+                # Progress always advances after every batch, regardless of errors
                 if total_candidates > 0:
                     progress = 35 + round((batch_end / total_candidates) * 60)
                 _push_state(f"  ✅ אצווה הושלמה — {total_matches} התאמות עד כה")
+                print(
+                    f"LOG: Batch finished — properties {batch_start + 1}–{batch_end} | "
+                    f"matches so far: {total_matches} | progress: {progress}%",
+                    flush=True,
+                )
 
         _push_state(
             f"📊 בסריקה זו: נסרקו {total_found} דירות, נשמרו {total_matches} התאמות חדשות"
