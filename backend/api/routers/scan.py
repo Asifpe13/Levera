@@ -290,6 +290,19 @@ def _run_scan_bg(email: str, db: DatabaseManager) -> None:
                     continue
                 fits, reason = check_property_fit(prop_data, prefs)
                 if not fits:
+                    _price  = prop_data.get("price", 0)
+                    _rooms  = prop_data.get("rooms", "?")
+                    _eq     = prefs.get("equity", 0)
+                    _loan   = max(0, (_price or 0) - _eq)
+                    _src    = prop_data.get("source", "?")
+                    _city   = prop_data.get("city", "?")
+                    print(
+                        f"DEBUG REJECTION [{_src}|{_city}]: "
+                        f"Price: {_price:,.0f}₪ | Rooms: {_rooms} | "
+                        f"Equity: {_eq:,.0f}₪ | Required Mortgage: {_loan:,.0f}₪ | "
+                        f"Reason: {reason}",
+                        flush=True,
+                    )
                     bucket = _classify_fit_rejection(str(reason))
                     rejections[bucket] = rejections.get(bucket, 0) + 1
                 else:
@@ -317,6 +330,12 @@ def _run_scan_bg(email: str, db: DatabaseManager) -> None:
                     if ai_score < MIN_AI_SCORE_FOR_ALERT:
                         bucket = _classify_ai_rejection(ai_summary)
                         rejections[bucket] = rejections.get(bucket, 0) + 1
+                        print(
+                            f"DEBUG AI REJECTION [{prop_data.get('source','?')}|{prop_data.get('city','?')}]: "
+                            f"Score: {ai_score} (threshold {MIN_AI_SCORE_FOR_ALERT}) | "
+                            f"Bucket: {bucket} | Summary: {ai_summary[:120]}",
+                            flush=True,
+                        )
                         continue
 
                     prop_data["matched_user_email"] = email

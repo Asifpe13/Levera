@@ -111,19 +111,29 @@ def check_property_fit(property_data: dict, user_data: dict) -> tuple[bool, str 
         if max_rent is not None and max_rent > 0 and price > max_rent:
             return False, f"שכר דירה {price:,.0f}₪ מעל התקציב ({max_rent:,.0f}₪)"
         return True, 0
-    # מכירה: חוק המשכנתא — בית ראשון ~25% הון עצמי; דירות להשקעה לרוב דורשות הון עצמי גבוה יותר.
+
+    # ── מכירה ──────────────────────────────────────────────────────────────
+
+    # בדיקת מחיר מקסימלי
     max_price = user_data.get("max_price")
     if max_price and price > max_price:
         return False, f"מחיר {price:,.0f}₪ מעל התקציב ({max_price:,.0f}₪)"
+
     equity = user_data.get("equity", 0)
     income = user_data.get("monthly_income", 0)
     ratio = user_data.get("max_repayment_ratio", 0.4)
-    # משך משכנתא מועדף בשנים (אם לא סופק, ברירת המחדל מהשוק)
     years = int(user_data.get("loan_term_years") or MARKET_SETTINGS["loan_term_years"])
+
+    # ── עסקת מזומן (הון עצמי >= מחיר) ─────────────────────────────────────
+    # אין צורך במשכנתא, אין בדיקת הכנסה, ואין בדיקת יחס החזר.
+    if price > 0 and equity >= price:
+        return True, 0  # עסקת מזומן — לא נדרשת משכנתא
+
+    # ── בדיקות משכנתא ─────────────────────────────────────────────────────
 
     # חוק המשכנתא בישראל:
     # - דירה ראשונה: ~75% מימון (25% הון עצמי)
-    # - דירה שנייה/שלישית: בדרך־כלל 50% מימון (50% הון עצמי)
+    # - דירה שנייה/שלישית: 50% הון עצמי
     home_index = int(user_data.get("home_index") or 1)
     equity_pct = HOME_EQUITY_BY_HOME_INDEX.get(
         home_index,
@@ -136,16 +146,21 @@ def check_property_fit(property_data: dict, user_data: dict) -> tuple[bool, str 
             f"הון נדרש: {required_equity:,.0f}₪ (יש לך {equity:,.0f}₪)"
         )
 
-    # ללא הכנסה חודשית אי־אפשר לוודא התאמה ליחס ההחזר — דוחים
+    # ללא הכנסה חודשית אי-אפשר לוודא התאמה ליחס ההחזר
     if not income or income <= 0:
-        return False, "לא ניתן לבדוק התאמה למשכנתא ללא הכנסה חודשית (בנקים מגבילים החזר לאחוז מההכנסה)"
+        return False, (
+            "לא ניתן לבדוק התאמה למשכנתא ללא הכנסה חודשית "
+            "(בנקים מגבילים החזר לאחוז מההכנסה)"
+        )
 
     repayment = calculate_monthly_repayment(price, equity, years=years)
     max_repayment = income * ratio
     if repayment > max_repayment:
         return False, (
-            f"החזר חודשי {repayment:,.0f}₪ מעל {ratio * 100:.0f}% מההכנסה ({max_repayment:,.0f}₪) — בנקים לא יאשרו"
+            f"החזר חודשי {repayment:,.0f}₪ מעל {ratio * 100:.0f}% מההכנסה "
+            f"({max_repayment:,.0f}₪) — בנקים לא יאשרו"
         )
+
     return True, round(repayment, 2)
 
 

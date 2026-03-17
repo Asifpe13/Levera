@@ -23,6 +23,7 @@ class User(BaseModel):
     loan_term_years: int = 30
     extra_preferences: Optional[str] = None
     is_active: bool = True
+    email_notifications: bool = True  # send property alerts and weekly reports by default
     # ─── מכירה ───
     equity: float = 0
     monthly_income: float = 0

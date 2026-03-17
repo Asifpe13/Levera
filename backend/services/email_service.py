@@ -237,15 +237,16 @@ class EmailService:
             )
             msg.attach(part)
 
+        logger.info(f"LOG: Attempting to send email to {to_email} | Subject: {subject}")
         try:
             with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
                 server.starttls()
                 server.login(self.sender, self.password)
                 server.sendmail(self.sender, to_email, msg.as_string())
-            logger.info(f"Email sent to {to_email}: {subject}")
+            logger.info(f"LOG: Email sent successfully to {to_email} | Subject: {subject}")
             return True
         except Exception as e:
-            logger.error(f"Failed to send email to {to_email}: {e}")
+            logger.error(f"LOG: Failed to send email to {to_email} | Error: {e}")
             return False
 
     def send_property_alert(self, to_email: str, properties: list[dict]) -> bool:

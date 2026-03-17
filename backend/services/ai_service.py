@@ -111,20 +111,38 @@ class AIService:
             return self._fallback_analysis(property_data, user_prefs)
 
     def _build_analysis_prompt(self, property_data: dict, user_prefs: dict) -> str:
-        price = property_data.get("price", 0)
-        price_str = f"{price:,.0f}" if isinstance(price, (int, float)) else str(price)
+        price = property_data.get("price", 0) or 0
+        price_str = f"{price:,.0f}" if price else "לא ידוע"
 
-        equity = user_prefs.get("equity", 0)
-        equity_str = f"{equity:,.0f}" if isinstance(equity, (int, float)) else str(equity)
+        equity = user_prefs.get("equity", 0) or 0
+        equity_str = f"{equity:,.0f}" if equity else "לא ידוע"
 
-        income = user_prefs.get("monthly_income", 0)
-        income_str = f"{income:,.0f}" if isinstance(income, (int, float)) else str(income)
+        income = user_prefs.get("monthly_income", 0) or 0
+        income_str = f"{income:,.0f}" if income else "לא ידוע"
 
         ratio = user_prefs.get("max_repayment_ratio", 0.4)
         ratio_pct = ratio * 100 if isinstance(ratio, (int, float)) else ratio
 
+        # Determine if this is a cash deal — no mortgage needed
+        is_cash_deal = price > 0 and equity >= price
+        loan_amount = max(0, price - equity)
+
+        if is_cash_deal:
+            finance_note = (
+                f"⭐ עסקת מזומן: הון עצמי ({equity_str}₪) מכסה את מלוא מחיר הנכס ({price_str}₪). "
+                "אין צורך במשכנתא. אין לנכות ניקוד בגלל מחיר הנכס. "
+                "תן בונוס ניקוד של +10 על כך שהעסקה אפשרית ללא מינוף."
+            )
+        else:
+            finance_note = (
+                f"הון עצמי: {equity_str}₪ | הלוואה נדרשת: {loan_amount:,.0f}₪. "
+                f"בנקים בישראל לא מאשרים החזר חודשי מעל {ratio_pct:.0f}% מהכנסה. "
+                "בית ראשון: 25% הון עצמי מינימום. "
+                "אל תניח אוטומטית שהנכס יקר מדי — בדוק את הנתונים הפיננסיים לפני שאתה מוריד ניקוד."
+            )
+
         return f"""נתח את הנכס הבא עבור הרוכש וציין ציון התאמה מ-0 עד 100.
-חשוב: בישראל בנקים לא מאשרים משכנתא שהחזר חודשי עולה על {ratio_pct}% מההכנסה. בית ראשון לפי חוק המשכנתא דורש 25% הון עצמי ממחיר הדירה.
+{finance_note}
 
 == פרטי הנכס ==
 עיר: {property_data.get('city', 'לא ידוע')}
@@ -147,16 +165,17 @@ class AIService:
 הכנסה חודשית: {income_str} ₪
 ערים מועדפות: {', '.join(user_prefs.get('target_cities', []))}
 טווח חדרים: {user_prefs.get('room_range_min', 1)}-{user_prefs.get('room_range_max', 8)}
-יחס החזר מקסימלי: {ratio_pct}%
+יחס החזר מקסימלי: {ratio_pct:.0f}%
 דרישות נוספות: {user_prefs.get('extra_preferences', 'אין')}
 
+הנחיה קריטית: אל תוריד ניקוד רק בגלל שמחיר הנכס גבוה, כל עוד ההון העצמי וההכנסה של המשתמש תומכים בעסקה.
 החזר JSON בפורמט הבא בלבד:
 {{
   "score": <0-100>,
   "summary": "<סיכום קצר בעברית - 2-3 משפטים>",
   "pros": ["<יתרון 1>", "<יתרון 2>"],
   "cons": ["<חיסרון 1>", "<חיסרון 2>"],
-  "monthly_repayment_estimate": <number>,
+  "monthly_repayment_estimate": <number or 0 for cash deals>,
   "recommendation": "<קנה / שקול / עבור>"
 }}"""
 
@@ -185,24 +204,28 @@ class AIService:
             score -= 10
             cons.append(f"{rooms} חדרים - מחוץ לטווח ({room_min}-{room_max})")
 
-        price = property_data.get("price", 0)
-        equity = user_prefs.get("equity", 0)
-        income = user_prefs.get("monthly_income", 0)
-        ratio = user_prefs.get("max_repayment_ratio", 0.4)
+        price  = property_data.get("price", 0) or 0
+        equity = user_prefs.get("equity", 0) or 0
+        income = user_prefs.get("monthly_income", 0) or 0
+        ratio  = user_prefs.get("max_repayment_ratio", 0.4)
 
-        if price and equity and income:
+        is_cash_deal = price > 0 and equity >= price
+        repayment = 0
+
+        if is_cash_deal:
+            # Cash purchase — no mortgage, give a bonus
+            score += 20
+            pros.append(f"עסקת מזומן — הון עצמי ({equity:,.0f}₪) מכסה את מלוא המחיר")
+        elif price and equity and income:
             from logic import calculate_monthly_repayment
             repayment = calculate_monthly_repayment(price, equity, 0.045, 30)
             max_repayment = income * ratio
-
             if repayment <= max_repayment:
                 score += 15
-                pros.append(f"החזר חודשי {repayment:,.0f}₪ - בתוך היכולת")
+                pros.append(f"החזר חודשי {repayment:,.0f}₪ — בתוך היכולת")
             else:
                 score -= 15
-                cons.append(f"החזר חודשי {repayment:,.0f}₪ - מעל היכולת ({max_repayment:,.0f}₪)")
-        else:
-            repayment = 0
+                cons.append(f"החזר חודשי {repayment:,.0f}₪ — מעל היכולת ({max_repayment:,.0f}₪)")
 
         if property_data.get("has_parking"):
             score += 3
