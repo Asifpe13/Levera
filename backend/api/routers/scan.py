@@ -161,6 +161,7 @@ def _run_scan_bg(email: str, db: DatabaseManager) -> None:
     total_found = 0
     total_matches = 0
     progress = 5
+    new_matches: list[dict] = []   # properties that passed all filters — used for email alert
     rejections: dict[str, int] = {
         "high_mortgage": 0,
         "over_budget":   0,
@@ -361,6 +362,7 @@ def _run_scan_bg(email: str, db: DatabaseManager) -> None:
                         try:
                             db.add_property(prop_data)
                             total_matches += 1
+                            new_matches.append(prop_data)
                             _push_state(
                                 f"  🏠 נשמרה: {prop_data.get('city', '?')} | "
                                 f"{prop_data.get('rooms', '?')} חד׳ | "
@@ -392,6 +394,32 @@ def _run_scan_bg(email: str, db: DatabaseManager) -> None:
                     f"matches so far: {total_matches} | progress: {progress}%",
                     flush=True,
                 )
+
+        # ── Log the search session to DB ──────────────────────────────────
+        try:
+            db.log_search(
+                user_email=email,
+                search_params={
+                    "cities": cities,
+                    "deal_types": deal_types,
+                },
+                results_count=total_found,
+                matches_count=total_matches,
+            )
+        except Exception as log_err:
+            print(f"LOG: db.log_search failed: {log_err}", flush=True)
+
+        # ── Send property alert email if any matches were found ────────────
+        if new_matches:
+            try:
+                _push_state(f"📧 שולח התראה על {len(new_matches)} דירות למייל {email}...")
+                print(f"LOG: Sending property alert to {email} ({len(new_matches)} matches)", flush=True)
+                engine.email.send_property_alert(email, new_matches)
+                _push_state("✅ האימייל נשלח בהצלחה", "success")
+                print(f"LOG: Alert email sent successfully to {email}", flush=True)
+            except Exception as mail_err:
+                print(f"LOG: Failed to send alert email to {email}: {mail_err}", flush=True)
+                _push_state(f"⚠️ שגיאה בשליחת מייל: {str(mail_err)[:80]}", "warn")
 
         _push_state(
             f"📊 בסריקה זו: נסרקו {total_found} דירות, נשמרו {total_matches} התאמות חדשות"
