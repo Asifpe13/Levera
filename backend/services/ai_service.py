@@ -75,10 +75,19 @@ class AIService:
                 logger.error(f"Failed to initialize Gemini client: {e}")
                 self.client = None
 
-    def analyze_property(self, property_data: dict, user_prefs: dict) -> dict:
+    def analyze_property(
+        self,
+        property_data: dict,
+        user_prefs: dict,
+        verified_repayment: float | None = None,
+    ) -> dict:
         """
         Uses Gemini to analyze how well a property matches user preferences.
         Returns {"score": 0-100, "summary": str, "pros": list, "cons": list}
+
+        verified_repayment: when supplied it means the property already passed the
+        deterministic financial check — pass the actual monthly repayment to the
+        prompt so Gemini doesn't have to re-calculate (and potentially get it wrong).
 
         A hard _AI_CALL_TIMEOUT second ceiling is enforced via a background thread.
         If Gemini doesn't respond in time the fallback rule-based analysis is returned
@@ -92,7 +101,9 @@ class AIService:
 
         def _call() -> None:
             try:
-                prompt = self._build_analysis_prompt(property_data, user_prefs)
+                prompt = self._build_analysis_prompt(
+                    property_data, user_prefs, verified_repayment=verified_repayment
+                )
                 system_instruction = (
                     'אתה מומחה נדל"ן ישראלי. תפקידך לנתח נכסים ולהעריך את ההתאמה שלהם לדרישות הרוכש. '
                     "ענה תמיד ב-JSON תקין בלבד, ללא טקסט נוסף."
@@ -133,7 +144,12 @@ class AIService:
 
         return result_holder[0] if result_holder else self._fallback_analysis(property_data, user_prefs)
 
-    def _build_analysis_prompt(self, property_data: dict, user_prefs: dict) -> str:
+    def _build_analysis_prompt(
+        self,
+        property_data: dict,
+        user_prefs: dict,
+        verified_repayment: float | None = None,
+    ) -> str:
         price = property_data.get("price", 0) or 0
         price_str = f"{price:,.0f}" if price else "לא ידוע"
 
@@ -145,6 +161,7 @@ class AIService:
 
         ratio = user_prefs.get("max_repayment_ratio", 0.4)
         ratio_pct = ratio * 100 if isinstance(ratio, (int, float)) else ratio
+        max_repayment = income * ratio if income else 0
 
         # Determine if this is a cash deal — no mortgage needed
         is_cash_deal = price > 0 and equity >= price
@@ -156,19 +173,35 @@ class AIService:
                 "אין צורך במשכנתא. אין לנכות ניקוד בגלל מחיר הנכס. "
                 "תן בונוס ניקוד של +10 על כך שהעסקה אפשרית ללא מינוף."
             )
+        elif verified_repayment is not None and verified_repayment > 0:
+            # Property already passed deterministic financial check — give Gemini the exact numbers
+            finance_note = (
+                f"✅ הנכס עבר בדיקה פיננסית אוטומטית. "
+                f"הון עצמי: {equity_str}₪ | הלוואה: {loan_amount:,.0f}₪ | "
+                f"החזר חודשי מחושב: {verified_repayment:,.0f}₪ (מתוך מקסימום {max_repayment:,.0f}₪ — "
+                f"{ratio_pct:.0f}% מהכנסה). "
+                "אין לנכות ניקוד מסיבות פיננסיות — הנכס כבר עמד בכל תנאי המשכנתא."
+            )
         else:
             finance_note = (
-                f"הון עצמי: {equity_str}₪ | הלוואה נדרשת: {loan_amount:,.0f}₪. "
-                f"בנקים בישראל לא מאשרים החזר חודשי מעל {ratio_pct:.0f}% מהכנסה. "
+                f"הון עצמי: {equity_str}₪ | הלוואה נדרשת: {loan_amount:,.0f}₪ | "
+                f"החזר מקסימלי מותר: {max_repayment:,.0f}₪ ({ratio_pct:.0f}% מהכנסה). "
                 "בית ראשון: 25% הון עצמי מינימום. "
-                "אל תניח אוטומטית שהנכס יקר מדי — בדוק את הנתונים הפיננסיים לפני שאתה מוריד ניקוד."
+                "אל תניח שהנכס יקר מדי — בדוק את הנתונים הפיננסיים לפני שאתה מוריד ניקוד."
             )
+
+        target_cities_str = ', '.join(user_prefs.get('target_cities', []))
+        city = property_data.get('city', 'לא ידוע')
+        city_note = (
+            f"⚠️ שים לב: {city} היא עיר מבוקשת לפי העדפות המשתמש — אל תנמיך ציון רק בגלל מיקום פריפריאלי."
+            if city in user_prefs.get('target_cities', []) else ""
+        )
 
         return f"""נתח את הנכס הבא עבור הרוכש וציין ציון התאמה מ-0 עד 100.
 {finance_note}
 
 == פרטי הנכס ==
-עיר: {property_data.get('city', 'לא ידוע')}
+עיר: {city}
 שכונה: {property_data.get('neighborhood', 'לא ידוע')}
 כתובת: {property_data.get('address', 'לא ידוע')}
 חדרים: {property_data.get('rooms', 'לא ידוע')}
@@ -186,12 +219,12 @@ class AIService:
 == דרישות הרוכש ==
 הון עצמי: {equity_str} ₪
 הכנסה חודשית: {income_str} ₪
-ערים מועדפות: {', '.join(user_prefs.get('target_cities', []))}
+ערים מועדפות: {target_cities_str}
 טווח חדרים: {user_prefs.get('room_range_min', 1)}-{user_prefs.get('room_range_max', 8)}
 יחס החזר מקסימלי: {ratio_pct:.0f}%
 דרישות נוספות: {user_prefs.get('extra_preferences', 'אין')}
-
-הנחיה קריטית: אל תוריד ניקוד רק בגלל שמחיר הנכס גבוה, כל עוד ההון העצמי וההכנסה של המשתמש תומכים בעסקה.
+{city_note}
+הנחיה קריטית: הציון צריך לשקף התאמה לדרישות הרוכש, לא שיקולי השקעה כלליים. אל תוריד ניקוד רק בגלל שמחיר הנכס גבוה, כל עוד ההון העצמי וההכנסה של המשתמש תומכים בעסקה.
 החזר JSON בפורמט הבא בלבד:
 {{
   "score": <0-100>,

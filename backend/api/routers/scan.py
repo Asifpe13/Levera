@@ -290,6 +290,8 @@ def _run_scan_bg(email: str, db: DatabaseManager) -> None:
                 ):
                     continue
                 fits, reason = check_property_fit(prop_data, prefs)
+                # When fits=True, `reason` holds the calculated monthly repayment (float)
+                verified_repayment = float(reason) if fits and isinstance(reason, (int, float)) else None
                 if not fits:
                     _price  = prop_data.get("price", 0)
                     _rooms  = prop_data.get("rooms", "?")
@@ -307,6 +309,9 @@ def _run_scan_bg(email: str, db: DatabaseManager) -> None:
                     bucket = _classify_fit_rejection(str(reason))
                     rejections[bucket] = rejections.get(bucket, 0) + 1
                 else:
+                    # Stash the verified repayment for the AI batch phase
+                    if verified_repayment is not None:
+                        prop_data["_verified_repayment"] = verified_repayment
                     candidates.append(prop_data)
 
             if candidates:
@@ -330,7 +335,10 @@ def _run_scan_bg(email: str, db: DatabaseManager) -> None:
 
                 for prop_data in batch:
                     try:
-                        analysis = engine.ai.analyze_property(prop_data, prefs)
+                        analysis = engine.ai.analyze_property(
+                            prop_data, prefs,
+                            verified_repayment=prop_data.pop("_verified_repayment", None),
+                        )
                         ai_score = analysis.get("score", 0)
                         ai_summary = analysis.get("summary", "")
 
