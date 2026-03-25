@@ -335,12 +335,28 @@ def _run_scan_bg(email: str, db: DatabaseManager) -> None:
 
                 for prop_data in batch:
                     try:
+                        verified_rep = prop_data.pop("_verified_repayment", None)
                         analysis = engine.ai.analyze_property(
                             prop_data, prefs,
-                            verified_repayment=prop_data.pop("_verified_repayment", None),
+                            verified_repayment=verified_rep,
                         )
                         ai_score = analysis.get("score", 0)
                         ai_summary = analysis.get("summary", "")
+
+                        # If the property passed the deterministic financial check
+                        # (verified_rep is set), the AI cannot drop it below the
+                        # threshold for qualitative reasons alone (e.g. location bias).
+                        # We floor the score so the deterministic check is the final
+                        # financial arbiter.
+                        if verified_rep is not None and ai_score < MIN_AI_SCORE_FOR_ALERT:
+                            print(
+                                f"DEBUG AI FLOOR [{prop_data.get('city','?')}]: "
+                                f"AI gave {ai_score} but property passed deterministic check "
+                                f"(repayment {verified_rep:,.0f}₪) — flooring to {MIN_AI_SCORE_FOR_ALERT}",
+                                flush=True,
+                            )
+                            ai_score = MIN_AI_SCORE_FOR_ALERT
+                            analysis["score"] = ai_score
 
                         if ai_score < MIN_AI_SCORE_FOR_ALERT:
                             bucket = _classify_ai_rejection(ai_summary)
