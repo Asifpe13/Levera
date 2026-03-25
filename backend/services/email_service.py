@@ -237,6 +237,15 @@ class EmailService:
             )
             msg.attach(part)
 
+        # Guard: fail loudly if SMTP credentials are not configured so the
+        # error shows up clearly in Render logs instead of a cryptic SMTP auth error.
+        if not self.sender or not self.password:
+            logger.error(
+                "LOG: Email NOT sent — EMAIL_SENDER or EMAIL_PASSWORD env vars are empty. "
+                "Set them in the Render dashboard under Environment → Environment Variables."
+            )
+            return False
+
         logger.info(f"LOG: Attempting to send email to {to_email} | Subject: {subject}")
         try:
             with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
