@@ -31,6 +31,8 @@ export default function TabSettings({ user }: { user: User }) {
   const [rentRoomRange, setRentRoomRange] = useState<[number, number]>([user.rent_room_range_min, user.rent_room_range_max])
   const [maxRent, setMaxRent] = useState(user.max_rent ?? 0)
   const [extraPreferences, setExtraPreferences] = useState(user.extra_preferences || '')
+  const [emailNotifications, setEmailNotifications] = useState(user.email_notifications ?? true)
+  const [pushNotifications, setPushNotifications] = useState(user.push_notifications ?? true)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
 
@@ -66,6 +68,8 @@ export default function TabSettings({ user }: { user: User }) {
         rent_room_range_max: rentRoomRange[1],
         max_rent: maxRent > 0 ? maxRent : null,
         extra_preferences: extraPreferences || null,
+        email_notifications: emailNotifications,
+        push_notifications: pushNotifications,
       })
       setUser(updated)
       setSaved(true)
@@ -297,6 +301,27 @@ export default function TabSettings({ user }: { user: User }) {
           <input type="number" className={inputClass} value={maxRent || ''} onChange={(e) => setMaxRent(Number(e.target.value) || 0)} step={500} />
         </div>
         <hr className="border-t border-slate-200 my-6" />
+        <div className="levera-card p-4 space-y-3">
+          <h3 className="text-sm font-semibold text-slate-800">התראות</h3>
+          <label className="flex items-center gap-3 text-sm text-slate-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={emailNotifications}
+              onChange={(e) => setEmailNotifications(e.target.checked)}
+              className="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+            />
+            התראות במייל (דירות חדשות ודוח שבועי)
+          </label>
+          <label className="flex items-center gap-3 text-sm text-slate-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={pushNotifications}
+              onChange={(e) => setPushNotifications(e.target.checked)}
+              className="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+            />
+            התראות push במובייל (דורש הרשאה במכשיר)
+          </label>
+        </div>
         <div>
           <label className={labelClass}>דרישות נוספות (לכל סוג)</label>
           <textarea className={`${inputClass} resize-y`} value={extraPreferences} onChange={(e) => setExtraPreferences(e.target.value)} rows={3} />

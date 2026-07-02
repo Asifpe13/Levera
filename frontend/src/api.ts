@@ -73,6 +73,8 @@ export interface User {
   rent_room_range_max: number;
   max_rent: number | null;
   extra_preferences: string | null;
+  email_notifications?: boolean;
+  push_notifications?: boolean;
 }
 
 export function login(email: string, password: string, rememberMe: boolean): Promise<LoginRes> {
@@ -252,4 +254,53 @@ export interface MarketTrends {
 
 export function getMarketTrends(): Promise<MarketTrends> {
   return request<MarketTrends>('/market/trends');
+}
+
+export interface AppNotification {
+  id: string;
+  title: string;
+  message: string;
+  type: 'match' | 'scan' | 'weekly' | 'system';
+  read: boolean;
+  created_at: string;
+  data?: Record<string, unknown>;
+}
+
+export function getNotifications(params?: { unread_only?: boolean; limit?: number }): Promise<AppNotification[]> {
+  const q: Record<string, string> = {};
+  if (params?.unread_only) q.unread_only = 'true';
+  if (params?.limit) q.limit = String(params.limit);
+  return request<AppNotification[]>('/notifications', { params: q });
+}
+
+export function markNotificationsRead(body: {
+  ids?: string[];
+  mark_all?: boolean;
+  read?: boolean;
+}): Promise<{ updated: number }> {
+  return request('/notifications/read', { method: 'PATCH', body: JSON.stringify(body) });
+}
+
+export function deleteReadNotifications(): Promise<{ deleted: number }> {
+  return request('/notifications/read', { method: 'DELETE' });
+}
+
+export function registerDeviceToken(
+  token: string,
+  platform: 'web' | 'android' | 'ios' | 'expo',
+): Promise<{ ok: boolean }> {
+  return request('/user/device-token', {
+    method: 'POST',
+    body: JSON.stringify({ token, platform }),
+  });
+}
+
+export function removeDeviceToken(
+  token: string,
+  platform: 'web' | 'android' | 'ios' | 'expo',
+): Promise<{ ok: boolean }> {
+  return request('/user/device-token', {
+    method: 'DELETE',
+    body: JSON.stringify({ token, platform }),
+  });
 }

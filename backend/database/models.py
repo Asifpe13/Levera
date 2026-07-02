@@ -24,6 +24,7 @@ class User(BaseModel):
     extra_preferences: Optional[str] = None
     is_active: bool = True
     email_notifications: bool = True  # send property alerts and weekly reports by default
+    push_notifications: bool = True  # mobile / web push alerts
     # ─── מכירה ───
     equity: float = 0
     monthly_income: float = 0
@@ -111,3 +112,20 @@ class WeeklyReport(BaseModel):
     report_html: Optional[str] = None
     sent_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class AppNotification(BaseModel):
+    user_email: str
+    title: str
+    message: str
+    type: str = "system"  # match | scan | weekly | system
+    read: bool = False
+    data: Optional[dict[str, Any]] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class DeviceToken(BaseModel):
+    user_email: str
+    token: str
+    platform: str = "web"  # web | android | ios | expo
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

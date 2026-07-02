@@ -22,7 +22,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from loguru import logger
 
-from api.routers import auth, user, properties, scan, market, config as config_router
+from api.routers import auth, user, properties, scan, market, config as config_router, notifications
 
 
 # ---------------------------------------------------------------------------
@@ -82,6 +82,12 @@ _cors_origins = [
     "http://127.0.0.1:5173",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:8081",
+    "http://127.0.0.1:8081",
+    "http://localhost:19006",
+    "http://127.0.0.1:19006",
+    "capacitor://localhost",
+    "http://localhost",
     "https://levera-pro.vercel.app",   # production frontend (exact origin)
 ]
 _extra = os.getenv("CORS_ORIGINS", "").strip()
@@ -118,6 +124,7 @@ async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSON
 
 app.include_router(auth.router,            prefix="/auth",       tags=["auth"])
 app.include_router(user.router,            prefix="/user",       tags=["user"])
+app.include_router(notifications.router,   prefix="/notifications", tags=["notifications"])
 app.include_router(properties.router,      prefix="/properties", tags=["properties"])
 app.include_router(scan.router,            prefix="/scan",       tags=["scan"])
 app.include_router(market.router,          prefix="/market",     tags=["market"])

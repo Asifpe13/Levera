@@ -3,6 +3,7 @@ import { vi } from 'vitest'
 import TabDeals from '../components/TabDeals'
 import type { User, Property } from '../api'
 import * as api from '../api'
+import * as loader from '../services/propertiesLoader'
 
 const MOCK_USER: User = {
   name: 'ישראל ישראלי',
@@ -39,8 +40,12 @@ const MOCK_PROPERTY: Property = {
 
 describe('TabDeals', () => {
   beforeEach(() => {
-    vi.spyOn(api, 'getProperties').mockResolvedValue([MOCK_PROPERTY])
-    vi.spyOn(api, 'startScan').mockResolvedValue({ ok: true, message: 'started' })
+    vi.spyOn(loader, 'loadPropertiesWithCache').mockResolvedValue({
+      properties: [MOCK_PROPERTY],
+      fromCache: false,
+      fetchedAt: Date.now(),
+    })
+    vi.spyOn(api, 'startScan').mockResolvedValue({ status: 'started' })
     vi.spyOn(api, 'getScanStatus').mockResolvedValue({
       running: false,
       finished: true,
@@ -97,8 +102,9 @@ describe('TabDeals', () => {
     await waitFor(() => screen.getByRole('button', { name: 'כל הדירות שנמצאו' }))
     fireEvent.click(screen.getByRole('button', { name: 'כל הדירות שנמצאו' }))
     await waitFor(() => {
-      expect(api.getProperties).toHaveBeenCalledWith(
-        expect.objectContaining({ view: 'all' })
+      expect(loader.loadPropertiesWithCache).toHaveBeenCalledWith(
+        MOCK_USER.email,
+        expect.objectContaining({ view: 'all' }),
       )
     })
   })
@@ -126,7 +132,11 @@ describe('TabDeals', () => {
   })
 
   it('shows empty state when no properties', async () => {
-    vi.spyOn(api, 'getProperties').mockResolvedValue([])
+    vi.spyOn(loader, 'loadPropertiesWithCache').mockResolvedValue({
+      properties: [],
+      fromCache: false,
+      fetchedAt: Date.now(),
+    })
     render(<TabDeals user={MOCK_USER} />)
     await waitFor(() => {
       expect(screen.getByText(/לא נמצאו דירות|ממתין לפקודה/)).toBeInTheDocument()

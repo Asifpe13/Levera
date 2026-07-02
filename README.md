@@ -51,40 +51,33 @@ python main.py
 
 ---
 
-## אפליקציית מובייל
-
-הפרונטאנד תומך בשלוש דרכים לשימוש מהטלפון:
-
-### 1. PWA — התקנה מהדפדפן (הכי מהיר)
-
-1. בנה והעלה לפרודקשן עם `VITE_API_URL=https://levera-backend.onrender.com`
-2. מהטלפון, פתח את האתר ב-Chrome (Android) או Safari (iOS)
-3. Android: תפריט → "הוסף למסך הבית" | iOS: שיתוף → "הוסף למסך הבית"
-4. האפליקציה תיפתח במצב standalone עם ניווט תחתון מותאם למובייל
-
-### 2. Capacitor — אפליקציה native (App Store / Play Store)
+## הרצה מקומית מלאה (בלי Render/Vercel)
 
 ```bash
-cd frontend
-npm install
-npm run build
-
-# הוספת פלטפורמות (פעם ראשונה בלבד)
-npx cap add android
-npx cap add ios
-
-# סנכרון ובנייה
-npm run cap:sync
-npm run cap:android   # פותח Android Studio
-npm run cap:ios       # פותח Xcode (macOS בלבד)
+chmod +x scripts/dev-local.sh
+./scripts/dev-local.sh
 ```
 
-**משתנה סביבה חובה לפרודקשן:** `VITE_API_URL=https://levera-backend.onrender.com`
+העתק `.env.example` ל-`.env` בשורש. MongoDB מקומי דרך `docker compose up -d`.
 
-### 3. תכונות מובייל
+| רכיב | פקודה | כתובת |
+|------|--------|--------|
+| Backend | `cd backend && python run_api.py` | http://127.0.0.1:8000 |
+| Web + PWA | `cd frontend && npm run dev` | http://localhost:5173 |
+| React Native | `cd mobile && npm start` | Expo Go / emulator |
 
-- **PWA** — Service Worker, manifest, התקנה למסך הבית
-- **ניווט תחתון** — תפריט תחתון במובייל (דירות, פרופילים, התראות, שוק, הגדרות)
-- **Safe areas** — תמיכה ב-notch וב-home indicator
-- **Capacitor** — Status bar, splash screen, כפתור חזרה ב-Android
-- **באנר התקנה** — הצעה להוסיף למסך הבית בדפדפן
+---
+
+## אפליקציית מובייל
+
+### 1. PWA — התקנה מהדפדפן
+### 2. Capacitor — native shell
+### 3. React Native (Expo) — `/mobile`
+
+תכונות חדשות:
+- **Push notifications** — device tokens + Expo/FCM (אופציונלי מקומית)
+- **Offline mode** — IndexedDB (web) / AsyncStorage (Expo)
+- **התראות בשרת** — `GET /notifications` (לא mock)
+- **מפה + מצלמה** — באפליקציית Expo
+
+ראה `mobile/README.md` לפרטים.
