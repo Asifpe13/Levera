@@ -7,9 +7,8 @@ import TabTrends from '../components/TabTrends'
 import TabProfiles from '../components/TabProfiles'
 import TabAlerts from '../components/TabAlerts'
 import { AgentIcon } from '../components/illustrations'
+import MobileBottomNav, { type TabId } from '../components/MobileBottomNav'
 import { INITIAL_NOTIFICATIONS, PROFILE_DEFINITIONS, type ProfileType } from '../levereConfig'
-
-type TabId = 'deals' | 'profiles' | 'alerts' | 'settings' | 'trends'
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'deals', label: 'דירות חיות' },
@@ -83,10 +82,10 @@ export default function DashboardPage() {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 min-w-0 overflow-auto">
+      <main className="flex-1 min-w-0 overflow-auto pb-20 md:pb-0">
         <div className="w-full max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
-          {/* Tabs nav – horizontal scroll on mobile */}
-          <nav className="flex gap-0 mb-6 bg-white/80 rounded-xl sm:rounded-2xl p-1 sm:p-1.5 shadow-sm border border-slate-200/80 overflow-x-auto">
+          {/* Tabs nav – desktop only; mobile uses bottom navigation */}
+          <nav className="hidden md:flex gap-0 mb-6 bg-white/80 rounded-xl sm:rounded-2xl p-1 sm:p-1.5 shadow-sm border border-slate-200/80 overflow-x-auto">
             {TABS.map((t) => (
               <button
                 key={t.id}
@@ -123,13 +122,15 @@ export default function DashboardPage() {
             {tab === 'trends' && <TabTrends />}
           </div>
 
-          <footer className="mt-6 text-center text-xs sm:text-sm text-slate-500">
+          <footer className="mt-6 mb-2 md:mb-0 text-center text-xs sm:text-sm text-slate-500">
             <span>Levera © 2026</span>
             <span className="mx-2">·</span>
             <span className="text-slate-600 font-medium">Asif Perets</span>
           </footer>
         </div>
       </main>
+
+      <MobileBottomNav activeTab={tab} onTabChange={setTab} />
     </div>
   )
 }

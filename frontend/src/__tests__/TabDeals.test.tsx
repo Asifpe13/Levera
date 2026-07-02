@@ -40,11 +40,15 @@ const MOCK_PROPERTY: Property = {
 describe('TabDeals', () => {
   beforeEach(() => {
     vi.spyOn(api, 'getProperties').mockResolvedValue([MOCK_PROPERTY])
-    vi.spyOn(api, 'runScan').mockResolvedValue({
-      ok: true,
-      log: [{ time: '', level: 'info', message: 'סריקה הושלמה' }],
+    vi.spyOn(api, 'startScan').mockResolvedValue({ ok: true, message: 'started' })
+    vi.spyOn(api, 'getScanStatus').mockResolvedValue({
+      running: false,
+      finished: true,
+      message: 'סריקה הושלמה',
       total_found: 10,
       total_matches: 1,
+      log: [{ time: '', level: 'info', message: 'סריקה הושלמה' }],
+      rejections: {},
     })
     vi.spyOn(api, 'requestWeeklyReport').mockResolvedValue({
       ok: true,
@@ -55,6 +59,7 @@ describe('TabDeals', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+    vi.useRealTimers()
   })
 
   it('renders agent header with user name', async () => {
@@ -102,10 +107,13 @@ describe('TabDeals', () => {
     render(<TabDeals user={MOCK_USER} />)
     await waitFor(() => screen.getByRole('button', { name: /שלח את הסוכן לסרוק/ }))
     fireEvent.click(screen.getByRole('button', { name: /שלח את הסוכן לסרוק/ }))
-    await waitFor(() => {
-      expect(screen.getByText(/נסרקו 10 דירות/)).toBeInTheDocument()
-      expect(screen.getByText(/נשמרו 1 התאמות/)).toBeInTheDocument()
-    })
+    await waitFor(
+      () => {
+        expect(screen.getByText(/נסרקו 10 דירות/)).toBeInTheDocument()
+        expect(screen.getByText(/נשמרו 1 התאמות/)).toBeInTheDocument()
+      },
+      { timeout: 4000 },
+    )
   })
 
   it('shows weekly report toast after requesting report', async () => {
