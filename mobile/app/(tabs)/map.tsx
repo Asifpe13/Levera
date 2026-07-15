@@ -21,9 +21,11 @@ const CITY_COORDS: Record<string, { lat: number; lng: number }> = {
   'ראשון לציון': { lat: 31.973, lng: 34.7925 },
 }
 
+const DEFAULT_COORDS = { lat: ISRAEL_REGION.latitude, lng: ISRAEL_REGION.longitude }
+
 function markerForProperty(p: Property, index: number) {
   const city = p.city?.trim()
-  const base = (city && CITY_COORDS[city]) || ISRAEL_REGION
+  const base = (city && CITY_COORDS[city]) || DEFAULT_COORDS
   const jitter = (index % 7) * 0.008
   return {
     latitude: base.lat + jitter,

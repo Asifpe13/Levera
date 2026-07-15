@@ -53,12 +53,18 @@ python main.py
 
 ## הרצה מקומית מלאה (בלי Render/Vercel)
 
+**חשוב:** מריצים על המחשב **שלך** (לא בטרמינל של Cloud Agent) — הטלפון צריך להגיע למחשב באותה רשת Wi‑Fi.
+
+### הגדרה לטלפון — כל מערכת הפעלה (Windows/macOS/Linux)
+
 ```bash
-chmod +x scripts/dev-local.sh
-./scripts/dev-local.sh
+node scripts/setup-phone-dev.mjs
 ```
 
-העתק `.env.example` ל-`.env` בשורש. MongoDB מקומי דרך `docker compose up -d`.
+הסקריפט מזהה את ה-IP של המחשב ברשת וכותב את `mobile/.env` ו-`frontend/.env.local` אוטומטית.
+אם זיהה IP שגוי (VPN/WSL): `node scripts/setup-phone-dev.mjs 192.168.x.x`
+
+העתק `.env.example` ל-`.env` בשורש (נעשה אוטומטית ע"י הסקריפט). MongoDB מקומי דרך `docker compose up -d`, או Atlas ב-`MONGODB_URI`.
 
 | רכיב | פקודה | כתובת |
 |------|--------|--------|
