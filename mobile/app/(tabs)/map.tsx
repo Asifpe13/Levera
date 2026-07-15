@@ -12,7 +12,6 @@ const ISRAEL_REGION = {
   longitudeDelta: 0.8,
 }
 
-/** Rough city coordinates for demo markers when property has no lat/lng */
 const CITY_COORDS: Record<string, { lat: number; lng: number }> = {
   'תל אביב - יפו': { lat: 32.0853, lng: 34.7818 },
   'פתח תקווה': { lat: 32.084, lng: 34.8878 },
@@ -21,9 +20,11 @@ const CITY_COORDS: Record<string, { lat: number; lng: number }> = {
   'ראשון לציון': { lat: 31.973, lng: 34.7925 },
 }
 
+const DEFAULT_COORDS = { lat: ISRAEL_REGION.latitude, lng: ISRAEL_REGION.longitude }
+
 function markerForProperty(p: Property, index: number) {
   const city = p.city?.trim()
-  const base = (city && CITY_COORDS[city]) || ISRAEL_REGION
+  const base = (city && CITY_COORDS[city]) || DEFAULT_COORDS
   const jitter = (index % 7) * 0.008
   return {
     latitude: base.lat + jitter,
@@ -49,9 +50,7 @@ export default function MapScreen() {
             longitude: loc.coords.longitude,
           })
         }
-      } catch {
-        // Location optional
-      }
+      } catch {}
 
       try {
         setProperties(await getProperties({ view: 'all', limit: 30 }))

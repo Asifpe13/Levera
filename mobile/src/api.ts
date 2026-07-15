@@ -47,6 +47,13 @@ export interface User {
   email_notifications?: boolean
 }
 
+export interface RegisterInput {
+  name: string
+  email: string
+  password: string
+  target_cities: string[]
+}
+
 export interface Property {
   id?: string
   city: string
@@ -72,6 +79,26 @@ export function login(email: string, password: string) {
   return request<{ email: string; token: string }>('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ email: email.trim(), password, remember_me: true }),
+  })
+}
+
+export function register(input: RegisterInput) {
+  return request<{ email: string; token: string }>('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({
+      ...input,
+      equity: 400_000,
+      monthly_income: 12_500,
+      max_repayment_ratio: 0.4,
+      search_type: 'both',
+      profile_type: 'HOME_BUYER',
+      home_index: 1,
+      loan_term_years: 30,
+      room_range_min: 3,
+      room_range_max: 5,
+      rent_room_range_min: 2,
+      rent_room_range_max: 5,
+    }),
   })
 }
 
