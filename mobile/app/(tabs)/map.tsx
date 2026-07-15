@@ -12,7 +12,6 @@ const ISRAEL_REGION = {
   longitudeDelta: 0.8,
 }
 
-/** Rough city coordinates for demo markers when property has no lat/lng */
 const CITY_COORDS: Record<string, { lat: number; lng: number }> = {
   'תל אביב - יפו': { lat: 32.0853, lng: 34.7818 },
   'פתח תקווה': { lat: 32.084, lng: 34.8878 },
@@ -51,9 +50,7 @@ export default function MapScreen() {
             longitude: loc.coords.longitude,
           })
         }
-      } catch {
-        // Location optional
-      }
+      } catch {}
 
       try {
         setProperties(await getProperties({ view: 'all', limit: 30 }))

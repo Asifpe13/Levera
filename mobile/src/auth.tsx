@@ -2,7 +2,15 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import * as Notifications from 'expo-notifications'
 import * as Device from 'expo-device'
 import { Platform } from 'react-native'
-import { getUser, login as apiLogin, registerDeviceToken, setToken, type User } from './api'
+import {
+  getUser,
+  login as apiLogin,
+  register as apiRegister,
+  registerDeviceToken,
+  setToken,
+  type RegisterInput,
+  type User,
+} from './api'
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -19,6 +27,7 @@ interface AuthContextValue {
   token: string | null
   loading: boolean
   login: (email: string, password: string) => Promise<void>
+  register: (input: RegisterInput) => Promise<void>
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
 }
@@ -80,8 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })()
   }, [])
 
-  const login = useCallback(async (email: string, password: string) => {
-    const res = await apiLogin(email, password)
+  const establishSession = useCallback(async (res: { token: string | null }) => {
     if (!res.token) throw new Error('לא התקבל token')
     await setToken(res.token)
     setTokenState(res.token)
@@ -90,6 +98,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await registerForPush(u.email)
   }, [])
 
+  const login = useCallback(async (email: string, password: string) => {
+    await establishSession(await apiLogin(email, password))
+  }, [establishSession])
+
+  const register = useCallback(async (input: RegisterInput) => {
+    await establishSession(await apiRegister(input))
+  }, [establishSession])
+
   const logout = useCallback(async () => {
     await setToken(null)
     setTokenState(null)
@@ -97,8 +113,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const value = useMemo(
-    () => ({ user, token, loading, login, logout, refreshUser }),
-    [user, token, loading, login, logout, refreshUser],
+    () => ({ user, token, loading, login, register, logout, refreshUser }),
+    [user, token, loading, login, register, logout, refreshUser],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

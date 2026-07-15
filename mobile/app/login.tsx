@@ -12,7 +12,6 @@ import {
 import { router } from 'expo-router'
 
 import { useAuth } from '@/src/auth'
-import { API_BASE } from '@/src/config'
 
 export default function LoginScreen() {
   const { login } = useAuth()
@@ -41,8 +40,7 @@ export default function LoginScreen() {
     >
       <View style={styles.card}>
         <Text style={styles.title}>Levera</Text>
-        <Text style={styles.subtitle}>סוכן נדל״ן חכם — אפליקציית React Native</Text>
-        <Text style={styles.hint}>API: {API_BASE}</Text>
+        <Text style={styles.subtitle}>הסוכן החכם שלך להחלטות נדל״ן</Text>
 
         <TextInput
           style={styles.input}
@@ -71,6 +69,13 @@ export default function LoginScreen() {
             <Text style={styles.buttonText}>התחבר</Text>
           )}
         </Pressable>
+        <Pressable
+          style={styles.secondaryButton}
+          onPress={() => router.push('/register')}
+          disabled={loading}
+        >
+          <Text style={styles.secondaryButtonText}>עדיין אין לך חשבון? להרשמה</Text>
+        </Pressable>
       </View>
     </KeyboardAvoidingView>
   )
@@ -88,7 +93,6 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 28, fontWeight: '800', color: '#0f766e', textAlign: 'center' },
   subtitle: { fontSize: 14, color: '#64748b', textAlign: 'center', marginBottom: 8 },
-  hint: { fontSize: 11, color: '#94a3b8', textAlign: 'center', marginBottom: 8 },
   input: {
     borderWidth: 1,
     borderColor: '#e2e8f0',
@@ -105,5 +109,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   buttonText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  secondaryButton: { alignItems: 'center', padding: 10 },
+  secondaryButtonText: { color: '#0f766e', fontWeight: '700', fontSize: 14 },
   error: { color: '#dc2626', textAlign: 'center', fontSize: 13 },
 })

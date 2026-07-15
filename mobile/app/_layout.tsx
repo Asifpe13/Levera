@@ -23,6 +23,7 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerTitleAlign: 'center' }}>
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="login" options={{ title: 'התחברות', headerBackVisible: false }} />
+        <Stack.Screen name="register" options={{ title: 'יצירת חשבון' }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       </Stack>
     </AuthProvider>

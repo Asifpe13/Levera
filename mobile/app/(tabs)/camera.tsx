@@ -30,7 +30,7 @@ export default function CameraScreen() {
     <View style={styles.container}>
       <CameraView ref={cameraRef} style={styles.camera} facing={facing} />
       <View style={styles.controls}>
-        <Text style={styles.hint}>צלם שלט, חזית בניין או חדר — לשימוש עתידי בזיהוי AI</Text>
+        <Text style={styles.hint}>החלף בין המצלמות לפי הצורך</Text>
         <Pressable
           style={styles.flip}
           onPress={() => setFacing((f) => (f === 'back' ? 'front' : 'back'))}
