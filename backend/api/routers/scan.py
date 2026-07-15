@@ -445,6 +445,35 @@ def _run_scan_bg(email: str, db: DatabaseManager) -> None:
                 print(f"LOG: Failed to send alert email to {email}: {mail_err}", flush=True)
                 _push_state(f"⚠️ שגיאה בשליחת מייל: {str(mail_err)[:80]}", "warn")
 
+            try:
+                from services.notification_service import NotificationService
+
+                first = new_matches[0]
+                city = first.get("city", "")
+                NotificationService(db).notify_user(
+                    email,
+                    title=f"נמצאו {len(new_matches)} התאמות חדשות",
+                    message=f"דירות חדשות ב{city} ועוד — נכנסו לטאב דירות לצפייה",
+                    ntype="match",
+                    data={"count": len(new_matches), "city": city},
+                )
+            except Exception as notify_err:
+                print(f"LOG: In-app/push notification failed: {notify_err}", flush=True)
+
+        try:
+            from services.notification_service import NotificationService
+
+            NotificationService(db).notify_user(
+                email,
+                title="הסריקה האוטומטית הסתיימה",
+                message=f"נסרקו {total_found} דירות, נשמרו {total_matches} התאמות",
+                ntype="scan",
+                data={"total_found": total_found, "total_matches": total_matches},
+                send_push=not bool(new_matches),
+            )
+        except Exception as notify_err:
+            print(f"LOG: Scan summary notification failed: {notify_err}", flush=True)
+
         _push_state(
             f"📊 בסריקה זו: נסרקו {total_found} דירות, נשמרו {total_matches} התאמות חדשות"
         )

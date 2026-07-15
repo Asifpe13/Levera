@@ -1,0 +1,65 @@
+{
+  "expo": {
+    "name": "Levera",
+    "slug": "levera-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "levera",
+    "userInterfaceStyle": "light",
+    "extra": {
+      "apiUrl": "http://localhost:8000"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "צילום נכסים בשטח",
+        "NSLocationWhenInUseUsageDescription": "הצגת דירות על המפה לידך"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0d9488",
+        "foregroundImage": "./assets/images/android-icon-foreground.png"
+      },
+      "permissions": [
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0d9488"
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#0d9488"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "אפשר ל-Levera לצלם נכסים בשטח"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "אפשר ל-Levera להציג את המיקום שלך על המפה"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

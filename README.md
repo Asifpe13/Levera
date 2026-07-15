@@ -7,7 +7,7 @@
 ```
 Levera/
 ├── backend/      ← שרת (FastAPI, DB, סורקים, AI, אימייל)
-├── frontend/     ← לקוח (React + TypeScript)
+├── frontend/     ← לקוח (React + TypeScript + PWA + Capacitor)
 └── .env          ← משתני סביבה (MONGODB_URI וכו')
 ```
 
@@ -48,3 +48,36 @@ python main.py
 ---
 
 קובץ `.env` יכול להימצא בשורש הפרויקט או בתיקיית `backend/` (לפחות `MONGODB_URI`).
+
+---
+
+## הרצה מקומית מלאה (בלי Render/Vercel)
+
+```bash
+chmod +x scripts/dev-local.sh
+./scripts/dev-local.sh
+```
+
+העתק `.env.example` ל-`.env` בשורש. MongoDB מקומי דרך `docker compose up -d`.
+
+| רכיב | פקודה | כתובת |
+|------|--------|--------|
+| Backend | `cd backend && python run_api.py` | http://127.0.0.1:8000 |
+| Web + PWA | `cd frontend && npm run dev` | http://localhost:5173 |
+| React Native | `cd mobile && npm start` | Expo Go / emulator |
+
+---
+
+## אפליקציית מובייל
+
+### 1. PWA — התקנה מהדפדפן
+### 2. Capacitor — native shell
+### 3. React Native (Expo) — `/mobile`
+
+תכונות חדשות:
+- **Push notifications** — device tokens + Expo/FCM (אופציונלי מקומית)
+- **Offline mode** — IndexedDB (web) / AsyncStorage (Expo)
+- **התראות בשרת** — `GET /notifications` (לא mock)
+- **מפה + מצלמה** — באפליקציית Expo
+
+ראה `mobile/README.md` לפרטים.

@@ -1,5 +1,9 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './AuthContext'
+import InstallPrompt from './components/InstallPrompt'
+import NativeShell from './components/NativeShell'
+import OfflineBanner from './components/OfflineBanner'
+import PushNotificationsManager from './components/PushNotificationsManager'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import DashboardPage from './pages/DashboardPage'
@@ -33,7 +37,11 @@ function AppRoutes() {
 export default function App() {
   return (
     <AuthProvider>
+      <NativeShell />
+      <OfflineBanner />
+      <PushNotificationsManager />
       <AppRoutes />
+      <InstallPrompt />
     </AuthProvider>
   )
 }

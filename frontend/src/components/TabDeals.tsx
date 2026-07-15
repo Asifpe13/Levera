@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { User, Property, ScanStatus, ScanRejections } from '../api'
-import { getProperties, startScan, getScanStatus, requestWeeklyReport } from '../api'
+import { startScan, getScanStatus, requestWeeklyReport } from '../api'
+import { loadPropertiesWithCache } from '../services/propertiesLoader'
 import PropertyCard from './PropertyCard'
 import { AgentIcon } from './illustrations'
 
@@ -184,23 +185,31 @@ export default function TabDeals({
   const [toast, setToast] = useState('')
   const [weeklyReportLoading, setWeeklyReportLoading] = useState(false)
   const [weeklyReportToast, setWeeklyReportToast] = useState('')
+  const [fromCache, setFromCache] = useState(false)
 
   const load = useCallback(async (mode: ViewMode = viewMode) => {
     setLoading(true)
     try {
-      const list = await getProperties({
+      const result = await loadPropertiesWithCache(user.email, {
         deal_type: dealFilter || undefined,
         city: cityFilter || undefined,
         limit: 50,
         view: mode,
       })
-      setProperties(list)
-      const citySet = new Set(list.map((p) => (p.city || '').trim()).filter(Boolean))
+      setProperties(result.properties)
+      setFromCache(result.fromCache)
+      const citySet = new Set(result.properties.map((p) => (p.city || '').trim()).filter(Boolean))
       setCities(['הכל', ...Array.from(citySet).sort()])
+    } catch (err) {
+      setProperties([])
+      setFromCache(false)
+      if (err instanceof Error && err.message.includes('אין חיבור')) {
+        setToast(err.message)
+      }
     } finally {
       setLoading(false)
     }
-  }, [dealFilter, cityFilter, viewMode])
+  }, [dealFilter, cityFilter, viewMode, user.email])
 
   useEffect(() => {
     load(viewMode)
@@ -328,6 +337,11 @@ export default function TabDeals({
 
   return (
     <div className="space-y-5">
+      {fromCache && (
+        <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-2 text-xs text-amber-900">
+          מציג דירות שמורות מהזיכרון המקומי — יתעדכן כשיחזור חיבור
+        </div>
+      )}
       {/* Agent summary card */}
       <div className="bg-gradient-to-l from-teal-50 to-white rounded-2xl border-2 border-teal-100 shadow-sm p-4 sm:p-6 flex gap-4 items-start">
         <div className="hidden sm:flex shrink-0 w-12 h-12 rounded-2xl bg-teal-100 text-teal-600 items-center justify-center">

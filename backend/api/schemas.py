@@ -132,6 +132,8 @@ class UserResponse(BaseModel):
     rent_room_range_max: int
     max_rent: Optional[float]
     extra_preferences: Optional[str]
+    email_notifications: bool = True
+    push_notifications: bool = True
 
     class Config:
         from_attributes = True
@@ -154,6 +156,8 @@ class UserUpdateRequest(BaseModel):
     rent_room_range_max: Optional[Annotated[int, Field(ge=1, le=20)]] = None
     max_rent: Optional[Annotated[int, Field(ge=0, le=1_000_000)]] = None
     extra_preferences: Optional[Annotated[str, Field(max_length=500)]] = None
+    email_notifications: Optional[bool] = None
+    push_notifications: Optional[bool] = None
 
     @field_validator("extra_preferences", mode="before")
     @classmethod
@@ -190,7 +194,14 @@ def user_dict_to_response(d: dict) -> UserResponse:
         rent_room_range_max=int(d.get("rent_room_range_max", 8)),
         max_rent=d.get("max_rent"),
         extra_preferences=d.get("extra_preferences"),
+        email_notifications=bool(d.get("email_notifications", True)),
+        push_notifications=bool(d.get("push_notifications", True)),
     )
+
+
+class DeviceTokenRequest(BaseModel):
+    token: Annotated[str, Field(min_length=8, max_length=512)]
+    platform: Literal["web", "android", "ios", "expo"] = "web"
 
 
 def serialize_property(p: dict) -> dict:

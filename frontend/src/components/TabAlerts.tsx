@@ -1,21 +1,23 @@
 import { useMemo, useState } from 'react'
-import type { NotificationItem } from '../levereConfig'
+import type { AppNotification } from '../api'
 import { Badge } from './ui'
 
 interface TabAlertsProps {
-  items: NotificationItem[]
-  onUpdateItems?: (items: NotificationItem[]) => void
+  items: AppNotification[]
+  loading?: boolean
+  onUpdateItems?: (items: AppNotification[]) => void
+  onRefresh?: () => void
 }
 
-const typeLabels: Record<NotificationItem['type'], string> = {
+const typeLabels: Record<AppNotification['type'], string> = {
   match: 'התאמות חדשות',
   scan: 'סריקות',
   weekly: 'דוחות שבועיים',
   system: 'מערכת',
 }
 
-export default function TabAlerts({ items, onUpdateItems }: TabAlertsProps) {
-  const [filterType, setFilterType] = useState<'all' | NotificationItem['type']>('all')
+export default function TabAlerts({ items, loading, onUpdateItems, onRefresh }: TabAlertsProps) {
+  const [filterType, setFilterType] = useState<'all' | AppNotification['type']>('all')
   const [filterRead, setFilterRead] = useState<'all' | 'read' | 'unread'>('all')
   const [search, setSearch] = useState('')
 
@@ -33,7 +35,7 @@ export default function TabAlerts({ items, onUpdateItems }: TabAlertsProps) {
     })
   }, [items, filterType, filterRead, search])
 
-  function updateList(next: NotificationItem[]) {
+  function updateList(next: AppNotification[]) {
     onUpdateItems?.(next)
   }
 
@@ -55,10 +57,15 @@ export default function TabAlerts({ items, onUpdateItems }: TabAlertsProps) {
         <div>
           <h2 className="text-lg font-semibold text-slate-800 mb-1">התראות ופעילות הסוכן</h2>
           <p className="text-sm text-slate-600">
-            כאן תראה כל התראה שהסוכן שלח — התאמות חדשות, סריקות שבוצעו ודוחות שבועיים.
+            התראות מהשרת — התאמות חדשות, סריקות שבוצעו ודוחות. גם push למובייל כשמוגדר.
           </p>
         </div>
         <div className="flex flex-wrap gap-2 text-xs">
+          {onRefresh && (
+            <button type="button" onClick={onRefresh} className="levera-btn levera-btn-secondary px-3 py-1.5">
+              רענן
+            </button>
+          )}
           <button
             type="button"
             onClick={markAllRead}
@@ -134,15 +141,16 @@ export default function TabAlerts({ items, onUpdateItems }: TabAlertsProps) {
             מציג {list.length} מתוך {items.length} התראות
           </span>
         </div>
-        {list.length === 0 ? (
+        {loading ? (
+          <div className="levera-card p-6 text-sm text-slate-600 text-center">טוען התראות...</div>
+        ) : list.length === 0 ? (
           <div className="levera-card p-6 text-sm text-slate-600 text-center">
-            עדיין אין התראות מתאימות לסינון שבחרת. ברגע שהסוכן ימצא דירות חדשות — הן יופיעו כאן
-            וגם במייל שלך.
+            עדיין אין התראות. ברגע שהסוכן ימצא דירות חדשות — הן יופיעו כאן, במייל, וב-push (אם הוגדר).
           </div>
         ) : (
           <div className="space-y-2">
             {list.map((n) => {
-              const date = new Date(n.createdAt)
+              const date = new Date(n.created_at)
               const timeLabel = isNaN(date.getTime())
                 ? ''
                 : date.toLocaleString('he-IL', {
@@ -199,4 +207,3 @@ export default function TabAlerts({ items, onUpdateItems }: TabAlertsProps) {
     </div>
   )
 }
-

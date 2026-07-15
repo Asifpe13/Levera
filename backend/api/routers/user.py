@@ -1,8 +1,8 @@
-"""User profile: get, update."""
+"""User profile: get, update, device tokens for push."""
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.deps import get_db, get_current_user_email
-from api.schemas import UserResponse, UserUpdateRequest, user_dict_to_response
+from api.schemas import UserResponse, UserUpdateRequest, DeviceTokenRequest, user_dict_to_response
 from database.db import DatabaseManager
 
 router = APIRouter()
@@ -59,7 +59,31 @@ def update_me(
         update["max_rent"] = body.max_rent if body.max_rent > 0 else None
     if body.extra_preferences is not None:
         update["extra_preferences"] = body.extra_preferences
+    if body.email_notifications is not None:
+        update["email_notifications"] = body.email_notifications
+    if body.push_notifications is not None:
+        update["push_notifications"] = body.push_notifications
     merged = {**user, **update}
     db.upsert_user(merged)
     updated = db.get_user_by_email(email)
     return user_dict_to_response(updated)
+
+
+@router.post("/device-token")
+def register_device_token(
+    body: DeviceTokenRequest,
+    email: str = Depends(get_current_user_email),
+    db: DatabaseManager = Depends(get_db),
+):
+    db.upsert_device_token(email, body.token.strip(), body.platform)
+    return {"ok": True}
+
+
+@router.delete("/device-token")
+def remove_device_token(
+    body: DeviceTokenRequest,
+    email: str = Depends(get_current_user_email),
+    db: DatabaseManager = Depends(get_db),
+):
+    db.remove_device_token(email, body.token.strip())
+    return {"ok": True}

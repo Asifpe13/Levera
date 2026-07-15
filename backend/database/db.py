@@ -54,6 +54,10 @@ class DatabaseManager:
         self.db.properties.create_index("ai_score")
         self.db.login_tokens.create_index("token", unique=True)
         self.db.login_tokens.create_index([("expires_at", 1)], expireAfterSeconds=0)
+        self.db.device_tokens.create_index([("user_email", 1), ("token", 1)], unique=True)
+        self.db.device_tokens.create_index("user_email")
+        self.db.notifications.create_index([("user_email", 1), ("created_at", DESCENDING)])
+        self.db.notifications.create_index([("user_email", 1), ("read", 1)])
 
     @property
     def users(self) -> Collection:
@@ -74,6 +78,14 @@ class DatabaseManager:
     @property
     def login_tokens(self) -> Collection:
         return self.db.login_tokens
+
+    @property
+    def device_tokens(self) -> Collection:
+        return self.db.device_tokens
+
+    @property
+    def notifications(self) -> Collection:
+        return self.db.notifications
 
     # ─── Remember-me tokens (הישאר מחובר, תוקף 7 ימים) ─────────
 
@@ -306,3 +318,96 @@ class DatabaseManager:
         doc = report.model_dump()
         self.weekly_reports.insert_one(doc)
         return doc
+
+    # ─── Device tokens (push) ─────────────────────────────────
+
+    def upsert_device_token(self, user_email: str, token: str, platform: str) -> None:
+        if not user_email or not token:
+            return
+        self.device_tokens.update_one(
+            {"user_email": user_email, "token": token},
+            {
+                "$set": {
+                    "user_email": user_email,
+                    "token": token,
+                    "platform": platform,
+                    "updated_at": datetime.now(timezone.utc),
+                }
+            },
+            upsert=True,
+        )
+
+    def remove_device_token(self, user_email: str, token: str) -> None:
+        self.device_tokens.delete_one({"user_email": user_email, "token": token})
+
+    def get_device_tokens(self, user_email: str) -> list[dict]:
+        if not user_email:
+            return []
+        return list(self.device_tokens.find({"user_email": user_email}))
+
+    # ─── In-app notifications ───────────────────────────────────
+
+    def create_notification(
+        self,
+        user_email: str,
+        title: str,
+        message: str,
+        ntype: str = "system",
+        data: dict | None = None,
+    ) -> dict:
+        doc = {
+            "user_email": user_email,
+            "title": title,
+            "message": message,
+            "type": ntype,
+            "read": False,
+            "data": data or {},
+            "created_at": datetime.now(timezone.utc),
+        }
+        result = self.notifications.insert_one(doc)
+        doc["_id"] = result.inserted_id
+        return doc
+
+    def list_notifications(
+        self,
+        user_email: str,
+        *,
+        unread_only: bool = False,
+        limit: int = 50,
+    ) -> list[dict]:
+        query: dict = {"user_email": user_email}
+        if unread_only:
+            query["read"] = False
+        return list(
+            self.notifications.find(query)
+            .sort("created_at", DESCENDING)
+            .limit(min(limit, 200))
+        )
+
+    def mark_notifications(self, user_email: str, ids: list[str], *, read: bool) -> int:
+        from bson import ObjectId
+
+        obj_ids = []
+        for nid in ids:
+            try:
+                obj_ids.append(ObjectId(nid))
+            except Exception:
+                continue
+        if not obj_ids:
+            return 0
+        result = self.notifications.update_many(
+            {"user_email": user_email, "_id": {"$in": obj_ids}},
+            {"$set": {"read": read}},
+        )
+        return result.modified_count
+
+    def mark_all_notifications(self, user_email: str, *, read: bool) -> int:
+        result = self.notifications.update_many(
+            {"user_email": user_email},
+            {"$set": {"read": read}},
+        )
+        return result.modified_count
+
+    def delete_read_notifications(self, user_email: str) -> int:
+        result = self.notifications.delete_many({"user_email": user_email, "read": True})
+        return result.deleted_count
