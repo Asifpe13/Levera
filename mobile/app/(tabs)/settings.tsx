@@ -4,7 +4,6 @@ import { router } from 'expo-router'
 
 import { updateUser } from '@/src/api'
 import { useAuth } from '@/src/auth'
-import { API_BASE } from '@/src/config'
 
 export default function SettingsScreen() {
   const { user, logout, refreshUser } = useAuth()
@@ -38,8 +37,6 @@ export default function SettingsScreen() {
         <Text style={styles.value}>{user.email}</Text>
         <Text style={styles.label}>ערים</Text>
         <Text style={styles.value}>{user.target_cities?.join(', ') || '—'}</Text>
-        <Text style={styles.label}>שרת API (מקומי)</Text>
-        <Text style={styles.mono}>{API_BASE}</Text>
       </View>
 
       <View style={styles.card}>
@@ -81,7 +78,6 @@ const styles = StyleSheet.create({
   },
   label: { fontSize: 12, color: '#64748b', textAlign: 'right', marginTop: 8 },
   value: { fontSize: 16, color: '#0f172a', textAlign: 'right', fontWeight: '600' },
-  mono: { fontSize: 11, color: '#475569', fontFamily: 'monospace', textAlign: 'right' },
   row: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
   switchLabel: { fontSize: 16, fontWeight: '600', color: '#0f172a' },
   message: { fontSize: 12, color: '#0d9488', textAlign: 'right' },
