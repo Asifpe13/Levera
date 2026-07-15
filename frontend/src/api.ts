@@ -1,4 +1,7 @@
-const API_BASE = import.meta.env.VITE_API_URL || '/api';
+const PRODUCTION_API_URL = 'https://levera-backend.onrender.com';
+const API_BASE =
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.DEV ? '/api' : PRODUCTION_API_URL);
 const FETCH_TIMEOUT_MS = 60_000;
 
 function getToken(): string | null {

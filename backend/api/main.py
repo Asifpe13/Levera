@@ -89,6 +89,7 @@ _cors_origins = [
     "capacitor://localhost",
     "http://localhost",
     "https://levera-pro.vercel.app",   # production frontend (exact origin)
+    "https://levera-frontend-4k9gszksc-asifpe13s-projects.vercel.app",
 ]
 _extra = os.getenv("CORS_ORIGINS", "").strip()
 if _extra:

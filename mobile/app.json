@@ -8,7 +8,7 @@
     "scheme": "levera",
     "userInterfaceStyle": "light",
     "extra": {
-      "apiUrl": "http://localhost:8000"
+      "apiUrl": "https://levera-backend.onrender.com"
     },
     "ios": {
       "supportsTablet": true,
